@@ -30,6 +30,21 @@ For each acceptance criterion you implement:
 3. If it involves data storage, verify the data is stored correctly
 4. Only mark complete if you have **verified** it works
 
+### Step 3b: Run Regression Tests
+
+After implementing a feature, run the regression test suite to ensure existing functionality still works:
+
+1. Run `pytest tests/` to execute all regression tests
+2. All existing tests must pass before marking any acceptance criteria complete
+3. If tests fail, fix the regression before continuing
+4. If you add a new CLI command or modify existing behavior, add or update tests in `tests/`
+
+**Test requirements:**
+- Tests use temp directories (never touch real `~/.threadline/`)
+- Tests should be fast and isolated
+- Each test verifies one specific behavior
+- Use fixtures for common setup (temp home, sample files)
+
 ### Step 4: Update the PRD
 
 After verifying each criterion:
@@ -51,6 +66,7 @@ After completing **one feature** (or making meaningful progress on a larger feat
 
 - **One feature per cycle** - Focus and complete, don't spread thin
 - **Verify before marking complete** - Actually test the functionality
+- **Run regression tests** - `pytest tests/` must pass before marking complete
 - **Follow existing patterns** - Check how similar features were implemented
 - **No scope creep** - Implement exactly what the acceptance criterion says
 - **Be honest about progress** - Don't mark items complete if they're not working
@@ -59,16 +75,18 @@ After completing **one feature** (or making meaningful progress on a larger feat
 
 Based on the PRD phases:
 
-1. **Phase 1b**: Entry Classification (F1.5), OCR (F1.2) - complete remaining Phase 1 items
-2. **Phase 2**: TUI Browser - Entry list, detail view, tagging, filtering
-3. **Phase 3**: Theme extraction, similarity search
-4. **Phase 4**: Export, maintenance commands
+1. **F1.10**: Regression Tests - set up test infrastructure and basic CLI tests
+2. **Phase 1b**: Entry Classification (F1.5), OCR (F1.2) - complete remaining Phase 1 items
+3. **Phase 2**: TUI Browser - Entry list, detail view, tagging, filtering
+4. **Phase 3**: Theme extraction, similarity search
+5. **Phase 4**: Export, maintenance commands
 
 ## Context Files
 
 - `PRD.md` - Product requirements with acceptance criteria checkboxes
 - `ARCHITECTURE.md` - Technical design and project structure
 - `src/threadline/` - Source code
+- `tests/` - Regression tests (run with `pytest tests/`)
 - `pyproject.toml` - Dependencies and project config
 
 ## Example Workflow
@@ -81,9 +99,10 @@ Based on the PRD phases:
 5. Wire it into ingest/pipeline.py
 6. Test: run `threadline ingest` on a test file
 7. Verify entries have entry_type populated
-8. Update PRD.md checkboxes for completed criteria
-9. Summarize: "Implemented local classification using bart-large-mnli"
-10. Exit
+8. Run `pytest tests/` → Ensure all regression tests pass
+9. Update PRD.md checkboxes for completed criteria
+10. Summarize: "Implemented local classification using bart-large-mnli"
+11. Exit
 ```
 
 ## Start Now

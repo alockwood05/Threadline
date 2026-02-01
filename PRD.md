@@ -282,6 +282,28 @@ Set up SQLite database on first run.
 - [x] Generates default `config.yaml`
 - [ ] Downloads default embedding model *(lazy loaded on first ingest)*
 
+#### F1.10: Regression Tests
+Minimal, pragmatic tests to verify CLI commands work correctly.
+
+**Scope:**
+- Test each CLI command's core functionality
+- Use temp directories to avoid polluting user data
+- Fast execution (< 30 seconds for full suite)
+- Run with `pytest tests/` or `threadline test` (if added)
+
+**Test Coverage:**
+- [x] `test_init`: `threadline init` creates expected directory structure and files
+- [x] `test_ingest_markdown`: `threadline ingest` successfully imports a markdown file, creates source and entry records
+- [x] `test_ingest_skip_duplicates`: Re-ingesting same file skips it (by hash)
+- [x] `test_ingest_directory`: `threadline ingest <dir>` recursively finds and imports files
+- [x] `test_stats`: `threadline stats` returns valid counts matching database state
+- [x] `test_entry_has_embedding`: Ingested entries have non-null embeddings
+- [x] `test_entry_has_classification`: Ingested entries have entry_type and confidence
+
+**Test Fixtures:**
+- [x] `tmp_threadline_home`: Creates isolated `~/.threadline` equivalent in temp dir
+- [x] `sample_markdown`: Sample markdown file with known content for predictable testing
+
 ---
 
 ### Phase 2: Browsing (TUI) *(fully local)*
