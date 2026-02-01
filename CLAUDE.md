@@ -31,6 +31,7 @@ mypy src/
 ```
 
 ## Architecture
+See [ARCHITECTURE.md](ARCHITECTURE.md) for a more detailed description of the architecture and design patterns.
 
 ### Directory Layout
 
