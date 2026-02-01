@@ -26,6 +26,10 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
+BOLD='\033[1m'
+DIM='\033[2m'
 NC='\033[0m' # No Color
 
 log() {
@@ -70,6 +74,10 @@ EOF
 while [[ $# -gt 0 ]]; do
     case $1 in
         -n|--iterations)
+            if [[ -z "${2:-}" ]]; then
+                error "Option $1 requires an argument"
+                exit 1
+            fi
             ITERATIONS="$2"
             shift 2
             ;;
@@ -78,11 +86,23 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -p|--prompt)
+            if [[ -z "${2:-}" ]]; then
+                error "Option $1 requires an argument"
+                exit 1
+            fi
             PROMPT_FILE="$2"
             shift 2
             ;;
         -m|--model)
+            if [[ -z "${2:-}" ]]; then
+                error "Option $1 requires an argument"
+                exit 1
+            fi
             MODEL="$2"
+            if [[ "$MODEL" != "sonnet" && "$MODEL" != "opus" ]]; then
+                error "Invalid model: $MODEL (must be 'sonnet' or 'opus')"
+                exit 1
+            fi
             shift 2
             ;;
         -h|--help)
@@ -157,7 +177,11 @@ main() {
 
     if [[ "$DRY_RUN" == true ]]; then
         warn "DRY RUN - would execute:"
-        echo "  claude --print \"$(head -5 "$PROMPT_FILE")...\""
+        echo "  claude -p \"<prompt from $PROMPT_FILE>\" --dangerously-skip-permissions --model $MODEL"
+        echo ""
+        echo "First 5 lines of prompt:"
+        head -5 "$PROMPT_FILE" | sed 's/^/  /'
+        echo "  ..."
         exit 0
     fi
 
@@ -186,17 +210,42 @@ main() {
         prompt=$(cat "$PROMPT_FILE")
 
         log "Executing Claude Code..."
+        log "Log file: $log_file"
+        echo ""
+        echo -e "${MAGENTA}${BOLD}╔═══════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${MAGENTA}${BOLD}║  🤖 CLAUDE OUTPUT START                                          ║${NC}"
+        echo -e "${MAGENTA}${BOLD}╚═══════════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
 
         # Run claude with the prompt, allow it to make changes
         # -p for non-interactive prompt mode
         # --dangerously-skip-permissions to bypass permission checks
-        if claude -p "$prompt" \
+        #
+        # Temporarily disable errexit to capture exit code properly.
+        # Direct output to terminal (via tee to log) without extra pipe stages
+        # to avoid buffering issues that make it seem like the script is hanging.
+        local exit_code=0
+        set +e
+
+        # Simple approach: run claude, tee to log, let output flow directly
+        # pipefail is already set, so we get claude's exit code from the pipeline
+        claude -p "$prompt" \
             --dangerously-skip-permissions \
             --model "$MODEL" \
-            2>&1 | tee "$log_file"; then
+            2>&1 | tee "$log_file"
+        exit_code=${PIPESTATUS[0]}
+
+        set -e
+
+        echo ""
+        echo -e "${MAGENTA}${BOLD}╔═══════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${MAGENTA}${BOLD}║  🤖 CLAUDE OUTPUT END                                            ║${NC}"
+        echo -e "${MAGENTA}${BOLD}╚═══════════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+
+        if [[ "$exit_code" -eq 0 ]]; then
             success "Iteration $i completed"
         else
-            local exit_code=$?
             error "Iteration $i failed with exit code $exit_code"
             warn "Check log: $log_file"
             # Continue to next iteration rather than failing entirely
