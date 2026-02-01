@@ -143,7 +143,7 @@ def chunk_text(text: str, min_chars: int = 50) -> list[Chunk]:
     ...
 
 # core/classifier.py
-class EntryClassifier:
+class Classifier:
     def __init__(self, model_name: str, labels: list[str]): ...
     def classify(self, text: str) -> tuple[str, float]: ...  # (label, confidence)
     def classify_batch(self, texts: list[str]) -> list[tuple[str, float]]: ...
@@ -166,7 +166,7 @@ class IngestPipeline:
         self,
         db: Database,
         embedder: Embedder,
-        classifier: EntryClassifier,
+        classifier: Classifier,
         config: IngestConfig,
     ): ...
 

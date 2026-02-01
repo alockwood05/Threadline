@@ -9,7 +9,7 @@ from threadline.models.classifier import ClassifierModel
 from threadline.ingest.models import EntryCreate
 
 
-class EntryClassifier:
+class Classifier:
     """Service for classifying entry types."""
 
     DEFAULT_LABELS = [

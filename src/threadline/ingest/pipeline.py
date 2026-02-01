@@ -26,7 +26,7 @@ from threadline.core.chunker import (
     generate_title_from_content,
 )
 from threadline.core.embedder import Embedder
-from threadline.core.classifier import EntryClassifier
+from threadline.core.classifier import Classifier
 
 
 class IngestPipeline:
@@ -70,7 +70,7 @@ class IngestPipeline:
 
         # Lazy-loaded embedder and classifier
         self._embedder: Embedder | None = None
-        self._classifier: EntryClassifier | None = None
+        self._classifier: Classifier | None = None
 
     @property
     def embedder(self) -> Embedder:
@@ -83,10 +83,10 @@ class IngestPipeline:
         return self._embedder
 
     @property
-    def classifier(self) -> EntryClassifier:
+    def classifier(self) -> Classifier:
         """Lazy load classifier."""
         if self._classifier is None:
-            self._classifier = EntryClassifier(
+            self._classifier = Classifier(
                 model_name=self.settings.classification.model,
                 labels=self.settings.classification.labels,
                 confidence_threshold=self.settings.classification.confidence_threshold,
