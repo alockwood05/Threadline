@@ -12,6 +12,7 @@ from threadline.db.repositories.sources import SourceRepository
 from threadline.db.repositories.entries import EntryRepository
 from threadline.ingest.file_scanner import scan_path, copy_to_originals
 from threadline.ingest.markdown import parse_markdown_file
+from threadline.ingest.ocr import perform_ocr, OCRError, OCRMethod
 from threadline.ingest.models import (
     IngestResult,
     SourceCreate,
@@ -99,6 +100,7 @@ class IngestPipeline:
         generate_embeddings: bool = True,
         classify_entries: bool = True,
         min_chunk_chars: int = 30,
+        ocr_method: str | None = None,
     ) -> IngestResult:
         """
         Ingest files from a path.
@@ -108,6 +110,7 @@ class IngestPipeline:
             generate_embeddings: Whether to generate embeddings
             classify_entries: Whether to classify entry types
             min_chunk_chars: Minimum characters for a chunk
+            ocr_method: OCR method for images ('pytesseract', 'trocr', 'vision')
 
         Returns:
             IngestResult with counts and any errors
@@ -130,7 +133,7 @@ class IngestPipeline:
             self._report_progress("Processing files", i, total_files)
 
             try:
-                entries = self._process_file(scanned, min_chunk_chars, result)
+                entries = self._process_file(scanned, min_chunk_chars, result, ocr_method)
                 all_entries.extend(entries)
             except Exception as e:
                 result.files_failed += 1
@@ -179,6 +182,7 @@ class IngestPipeline:
         scanned: ScannedFile,
         min_chunk_chars: int,
         result: IngestResult,
+        ocr_method: str | None = None,
     ) -> list[EntryCreate]:
         """Process a single file through the pipeline."""
         # Check for duplicate
@@ -195,8 +199,30 @@ class IngestPipeline:
         # Parse content
         if scanned.file_type == "markdown":
             parsed = parse_markdown_file(scanned.path)
+        elif scanned.file_type == "image":
+            # Process image with OCR
+            method = ocr_method or self.settings.ocr.default
+            try:
+                ocr_result = perform_ocr(
+                    scanned.path,
+                    method=method,
+                    cache_dir=self.models_dir,
+                    settings=self.settings,
+                )
+                # Create a ParsedDocument from OCR result
+                parsed = ParsedDocument(
+                    raw_text=ocr_result.text,
+                    title=None,
+                    date=None,
+                    location=None,
+                )
+            except OCRError as e:
+                # Log error but continue with batch
+                result.files_failed += 1
+                result.errors.append(f"{scanned.filename}: OCR failed - {str(e)}")
+                return []
         else:
-            # Image - skip for MVP (no OCR yet)
+            # Unknown file type - skip
             result.files_skipped += 1
             return []
 

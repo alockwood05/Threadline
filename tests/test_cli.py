@@ -273,3 +273,43 @@ class TestEntryHasClassification:
             )
 
         db.close()
+
+
+class TestOCRImageDetection:
+    """Tests for OCR image detection during ingestion."""
+
+    def test_image_file_detected_during_scan(
+        self, initialized_threadline: Path, sample_image: Path
+    ) -> None:
+        """Image files are detected during ingestion."""
+        from threadline.ingest.file_scanner import scan_path
+
+        scanned_files = list(scan_path(sample_image))
+        assert len(scanned_files) == 1, "Image file not detected"
+        assert scanned_files[0].file_type == "image", "File type should be 'image'"
+
+    def test_image_ingest_graceful_failure_without_ocr(
+        self, initialized_threadline: Path, sample_image: Path
+    ) -> None:
+        """Image ingestion fails gracefully when OCR dependencies not installed."""
+        # Attempt to ingest image - should fail gracefully (pytesseract not installed)
+        result = runner.invoke(app, ["ingest", str(sample_image), "--no-embeddings"])
+
+        # Should complete without crashing
+        assert result.exit_code == 0, f"Ingest crashed: {result.output}"
+
+        # Should report failure or skip
+        # Either files_failed=1 or files_skipped=1 depending on OCR availability
+        assert "Files imported: 0" in result.output or "Files failed: 1" in result.output
+
+    def test_ocr_flag_accepted(
+        self, initialized_threadline: Path, sample_image: Path
+    ) -> None:
+        """The --ocr flag is accepted by the CLI."""
+        # Test that the flag is recognized (even if OCR fails due to missing deps)
+        result = runner.invoke(
+            app, ["ingest", str(sample_image), "--no-embeddings", "--ocr=pytesseract"]
+        )
+
+        # Should not crash with unknown option error
+        assert "No such option" not in result.output, "OCR flag not recognized"

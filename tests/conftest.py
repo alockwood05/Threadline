@@ -129,3 +129,40 @@ def initialized_threadline(tmp_threadline_home: Path) -> Path:
     assert result.exit_code == 0, f"Init failed: {result.output}"
 
     return tmp_threadline_home
+
+
+@pytest.fixture
+def sample_image(tmp_path: Path) -> Path:
+    """
+    Create a simple test image file for OCR testing.
+
+    Returns the path to the created image file.
+    """
+    # Create a minimal valid PNG file (1x1 pixel, white)
+    # PNG file format: signature + IHDR chunk + IDAT chunk + IEND chunk
+    png_data = bytes([
+        # PNG signature
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        # IHDR chunk (width=1, height=1, bit_depth=8, color_type=2 RGB)
+        0x00, 0x00, 0x00, 0x0D,  # chunk length
+        0x49, 0x48, 0x44, 0x52,  # IHDR
+        0x00, 0x00, 0x00, 0x01,  # width
+        0x00, 0x00, 0x00, 0x01,  # height
+        0x08, 0x02,              # bit depth, color type
+        0x00, 0x00, 0x00,        # compression, filter, interlace
+        0x90, 0x77, 0x53, 0xDE,  # CRC
+        # IDAT chunk (compressed pixel data for 1 white pixel)
+        0x00, 0x00, 0x00, 0x0C,  # chunk length
+        0x49, 0x44, 0x41, 0x54,  # IDAT
+        0x08, 0xD7, 0x63, 0xF8, 0xFF, 0xFF, 0xFF, 0x00,
+        0x05, 0xFE, 0x02, 0xFE,  # CRC placeholder (not strictly valid but works)
+        # IEND chunk
+        0x00, 0x00, 0x00, 0x00,  # chunk length
+        0x49, 0x45, 0x4E, 0x44,  # IEND
+        0xAE, 0x42, 0x60, 0x82,  # CRC
+    ])
+
+    img_file = tmp_path / "test_image.png"
+    img_file.write_bytes(png_data)
+
+    return img_file

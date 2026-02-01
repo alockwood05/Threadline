@@ -1,6 +1,7 @@
 """CLI ingest command."""
 
 from pathlib import Path
+from typing import Optional
 
 import typer
 from rich.console import Console
@@ -31,6 +32,11 @@ def ingest_cmd(
         30,
         "--min-chunk-chars",
         help="Minimum characters for a chunk",
+    ),
+    ocr: Optional[str] = typer.Option(
+        None,
+        "--ocr",
+        help="OCR method for images: pytesseract (default), trocr (handwriting), vision (LLM-based)",
     ),
 ) -> None:
     """Ingest journal files from a file or directory."""
@@ -72,6 +78,7 @@ def ingest_cmd(
             path=path,
             generate_embeddings=not no_embeddings,
             min_chunk_chars=min_chunk_chars,
+            ocr_method=ocr,
         )
 
     db.close()

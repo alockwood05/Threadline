@@ -196,12 +196,12 @@ Import multiple files in a single command.
 #### F1.2: OCR for Images *(local)*
 Extract text from handwritten/typed journal images.
 
-- [ ] Detects image files during ingestion
-- [ ] Default: `pytesseract` for typed text
-- [ ] Option: `--ocr=trocr` for handwritten text (uses `trocr-base-handwritten`)
+- [x] Detects image files during ingestion
+- [x] Default: `pytesseract` for typed text
+- [x] Option: `--ocr=trocr` for handwritten text (uses `trocr-base-handwritten`)
 - [ ] Option: `--ocr=vision` for LLM-based OCR (requires LLM config)
-- [ ] Stores raw OCR text in `sources.raw_text`
-- [ ] Handles OCR failures gracefully (logs error, continues batch)
+- [x] Stores raw OCR text in `sources.raw_text`
+- [x] Handles OCR failures gracefully (logs error, continues batch)
 
 #### F1.3: Markdown Parsing *(local)*
 Parse markdown files preserving structure.
@@ -299,6 +299,9 @@ Minimal, pragmatic tests to verify CLI commands work correctly.
 - [x] `test_stats`: `threadline stats` returns valid counts matching database state
 - [x] `test_entry_has_embedding`: Ingested entries have non-null embeddings
 - [x] `test_entry_has_classification`: Ingested entries have entry_type and confidence
+- [x] `test_image_file_detected_during_scan`: Image files detected with correct file_type
+- [x] `test_image_ingest_graceful_failure_without_ocr`: OCR failures handled gracefully
+- [x] `test_ocr_flag_accepted`: `--ocr` CLI flag recognized
 
 **Test Fixtures:**
 - [x] `tmp_threadline_home`: Creates isolated `~/.threadline` equivalent in temp dir
