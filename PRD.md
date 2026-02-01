@@ -314,24 +314,24 @@ Minimal, pragmatic tests to verify CLI commands work correctly.
 #### F2.1: Entry List View
 Infinite scroll list of all entries.
 
-- [ ] Launch with `threadline browse`
-- [ ] Shows entries in reverse chronological order (newest first)
-- [ ] Each row displays: `title` | `summary_quote` | `entry_type` badge
-- [ ] Color-coded badges by entry_type
-- [ ] Lazy loading: fetches entries in pages as user scrolls
-- [ ] Keyboard navigation: `j/k` or arrow keys to move
-- [ ] `Enter` to expand/view full entry
-- [ ] `q` to quit
+- [x] Launch with `threadline browse`
+- [x] Shows entries in reverse chronological order (newest first)
+- [x] Each row displays: `title` | `summary_quote` | `entry_type` badge
+- [x] Color-coded badges by entry_type
+- [x] Lazy loading: fetches entries in pages as user scrolls
+- [x] Keyboard navigation: `j/k` or arrow keys to move
+- [x] `Enter` to expand/view full entry
+- [x] `q` to quit
 
 #### F2.2: Entry Detail View
 View full entry content with metadata.
 
-- [ ] Shows full `content` text
-- [ ] Displays: title, date, location, entry_type, tags
-- [ ] Shows classification confidence (if <0.7, shows "uncertain")
+- [x] Shows full `content` text
+- [x] Displays: title, date, location, entry_type, tags
+- [x] Shows classification confidence (if <0.7, shows "uncertain")
 - [ ] Shows link to original source file
 - [ ] `o` to open original file in `$EDITOR`
-- [ ] `Esc` or `q` to return to list
+- [x] `Esc` or `q` to return to list
 
 #### F2.3: Quick Tagging
 Tag entries without leaving list view.

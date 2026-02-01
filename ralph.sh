@@ -241,6 +241,7 @@ main() {
         # pipefail is already set, so we get claude's exit code from the pipeline.
         unbuffer claude -p "$prompt" \
             --dangerously-skip-permissions \
+            --verbose \
             --model "$MODEL" \
             2>&1 | tee "$log_file"
         exit_code=${PIPESTATUS[0]}
@@ -249,7 +250,7 @@ main() {
 
         echo ""
         echo -e "${MAGENTA}${BOLD}╔═══════════════════════════════════════════════════════════════════╗${NC}"
-        echo -e "${MAGENTA}${BOLD}║  🤖 CLAUDE OUTPUT END                                            ║${NC}"
+        echo -e "${MAGENTA}${BOLD}║  🤖 CLAUDE OUTPUT END                                             ║${NC}"
         echo -e "${MAGENTA}${BOLD}╚═══════════════════════════════════════════════════════════════════╝${NC}"
         echo ""
 

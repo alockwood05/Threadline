@@ -38,10 +38,12 @@ def main(
 from threadline.cli.init import init_cmd
 from threadline.cli.ingest import ingest_cmd
 from threadline.cli.stats import stats_cmd
+from threadline.cli.browse import browse_cmd
 
 app.command(name="init")(init_cmd)
 app.command(name="ingest")(ingest_cmd)
 app.command(name="stats")(stats_cmd)
+app.command(name="browse")(browse_cmd)
 
 
 if __name__ == "__main__":
