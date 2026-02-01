@@ -57,6 +57,47 @@ threadline browse
 
 See [PRD.md](PRD.md) for full feature breakdown and [ARCHITECTURE.md](ARCHITECTURE.md) for technical design.
 
+## Development
+
+### Setup
+
+```bash
+# Install in development mode
+pip install -e .
+
+# Run tests
+pytest tests/
+
+# Linting
+ruff check src/
+ruff format src/
+```
+
+### Automated Development (ralph.sh)
+
+The `ralph.sh` script automates feature development by running Claude Code in a loop to implement PRD items.
+
+**System dependencies:**
+
+```bash
+# macOS - required for unbuffered output streaming
+brew install expect
+
+# Debian/Ubuntu
+sudo apt install expect
+
+# Fedora/RHEL
+sudo dnf install expect
+```
+
+**Usage:**
+
+```bash
+./ralph.sh           # Run once
+./ralph.sh 3         # Run 3 iterations
+./ralph.sh -m opus   # Use opus model for complex work
+```
+
 ## License
 
 MIT

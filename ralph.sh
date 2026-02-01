@@ -133,6 +133,15 @@ if ! command -v claude &> /dev/null; then
     exit 1
 fi
 
+if ! command -v unbuffer &> /dev/null; then
+    error "unbuffer not found (provided by 'expect' package)"
+    error "  macOS:        brew install expect"
+    error "  Debian/Ubuntu: sudo apt install expect"
+    error "  Fedora/RHEL:   sudo dnf install expect"
+    error "unbuffer is needed to prevent output buffering when piping claude output"
+    exit 1
+fi
+
 if [[ ! -f "$PROMPT_FILE" ]]; then
     error "Prompt file not found: $PROMPT_FILE"
     exit 1
@@ -227,9 +236,10 @@ main() {
         local exit_code=0
         set +e
 
-        # Simple approach: run claude, tee to log, let output flow directly
-        # pipefail is already set, so we get claude's exit code from the pipeline
-        claude -p "$prompt" \
+        # Use unbuffer to prevent output buffering when piping to tee.
+        # Without it, claude detects the pipe and buffers output until exit.
+        # pipefail is already set, so we get claude's exit code from the pipeline.
+        unbuffer claude -p "$prompt" \
             --dangerously-skip-permissions \
             --model "$MODEL" \
             2>&1 | tee "$log_file"
