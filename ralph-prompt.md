@@ -53,14 +53,17 @@ After verifying each criterion:
 2. If an item only partially works, leave it unchecked and add a note
 3. Be honest - only check items that truly work
 
-### Step 5: Summarize and Exit
+### Step 5: Summarize, Commit code with git, and Exit
 
 After completing **one feature** (or making meaningful progress on a larger feature):
 
 1. Provide a brief summary of what was implemented
 2. List which acceptance criteria were completed
 3. Note any issues or blockers encountered
-4. Exit cleanly - do not continue to the next feature
+4. Create logical commits for all your work;
+   - git commits should have the title of the PRD section title, and include the check boxes completed in the body
+   - for fixes, they should prepend the commit title with "fix:"
+5. Exit cleanly - `git commit -m` your work, and do not continue to the next feature
 
 ## Important Rules
 
