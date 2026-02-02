@@ -222,7 +222,7 @@ main() {
         log "Log file: $log_file"
         echo ""
         echo -e "${MAGENTA}${BOLD}╔═══════════════════════════════════════════════════════════════════╗${NC}"
-        echo -e "${MAGENTA}${BOLD}║  🤖 CLAUDE OUTPUT START                                          ║${NC}"
+        echo -e "${MAGENTA}${BOLD}║  🤖 CLAUDE OUTPUT START                                           ║${NC}"
         echo -e "${MAGENTA}${BOLD}╚═══════════════════════════════════════════════════════════════════╝${NC}"
         echo ""
 
