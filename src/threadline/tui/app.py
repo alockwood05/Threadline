@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, VerticalScroll
@@ -10,7 +13,8 @@ from textual.reactive import reactive
 
 from threadline.db.connection import get_db
 from threadline.db.repositories.entries import EntryRepository
-from threadline.ingest.models import Entry
+from threadline.db.repositories.sources import SourceRepository
+from threadline.ingest.models import Entry, Source
 
 # Color mapping for entry types
 ENTRY_TYPE_COLORS = {
@@ -140,6 +144,7 @@ class ThreadlineApp(App):
         Binding("up", "cursor_up", "Up", show=False),
         Binding("enter", "view_entry", "View", show=True),
         Binding("escape", "close_detail", "Back", show=False),
+        Binding("o", "open_source", "Open", show=True),
     ]
 
     # Reactive state
@@ -147,6 +152,7 @@ class ThreadlineApp(App):
     current_offset: reactive[int] = reactive(0)
     page_size: int = 50
     selected_entry: Entry | None = None
+    selected_source: Source | None = None
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -240,6 +246,11 @@ class ThreadlineApp(App):
         detail_content = self.query_one("#detail-content", Static)
         list_view = self.query_one("#entry-list", ListView)
 
+        # Fetch the source for this entry
+        with get_db() as db:
+            source_repo = SourceRepository(db.conn)
+            self.selected_source = source_repo.get(entry.source_id)
+
         # Build metadata
         meta_parts = []
         if entry.entry_date:
@@ -252,6 +263,8 @@ class ThreadlineApp(App):
             meta_parts.append(f"Location: {entry.location}")
         if entry.tags:
             meta_parts.append(f"Tags: {', '.join(entry.tags)}")
+        if self.selected_source:
+            meta_parts.append(f"Source: {self.selected_source.filepath}")
 
         meta_text = " | ".join(meta_parts) if meta_parts else "No metadata"
         detail_meta.update(meta_text)
@@ -270,6 +283,26 @@ class ThreadlineApp(App):
             detail_view.remove_class("visible")
             list_view.display = True
             self.selected_entry = None
+            self.selected_source = None
+
+    def action_open_source(self) -> None:
+        """Open the source file in $EDITOR."""
+        detail_view = self.query_one("#detail-view", Container)
+
+        # Only works in detail view
+        if not detail_view.has_class("visible"):
+            return
+
+        if self.selected_source is None:
+            return
+
+        # Get editor from environment, default to vim
+        editor = os.environ.get("EDITOR", "vim")
+        filepath = self.selected_source.filepath
+
+        # Suspend the app and open the editor
+        with self.suspend():
+            subprocess.run([editor, filepath])
 
 
 def run_browse() -> None:

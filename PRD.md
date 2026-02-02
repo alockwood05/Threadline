@@ -329,8 +329,8 @@ View full entry content with metadata.
 - [x] Shows full `content` text
 - [x] Displays: title, date, location, entry_type, tags
 - [x] Shows classification confidence (if <0.7, shows "uncertain")
-- [ ] Shows link to original source file
-- [ ] `o` to open original file in `$EDITOR`
+- [x] Shows link to original source file
+- [x] `o` to open original file in `$EDITOR`
 - [x] `Esc` or `q` to return to list
 
 #### F2.3: Quick Tagging
