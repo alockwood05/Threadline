@@ -346,13 +346,13 @@ Tag entries without leaving list view.
 #### F2.4: Filtering
 Filter entries by type and tags.
 
-- [ ] `f` opens filter panel
-- [ ] Filter by `entry_type` (checkboxes: thought, todo, summary, etc.)
-- [ ] Filter by tags (multi-select)
-- [ ] "Hide todos" quick toggle (common use case)
-- [ ] Active filters shown in status bar
-- [ ] `c` to clear all filters
-- [ ] Filters persist during session
+- [x] `f` opens filter panel
+- [x] Filter by `entry_type` (checkboxes: thought, todo, summary, etc.)
+- [x] Filter by tags (multi-select)
+- [x] "Hide todos" quick toggle (common use case)
+- [x] Active filters shown in status bar
+- [x] `c` to clear all filters
+- [x] Filters persist during session
 
 #### F2.5: Theme Overview
 Display algorithmically-extracted themes.

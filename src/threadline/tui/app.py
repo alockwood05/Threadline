@@ -7,8 +7,8 @@ import subprocess
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, Vertical
-from textual.widgets import Footer, Header, Static, ListItem, ListView, Label, Input, Checkbox
+from textual.containers import Container, Vertical, Horizontal
+from textual.widgets import Footer, Header, Static, ListItem, ListView, Label, Input, Checkbox, Button
 from textual.reactive import reactive
 from textual.message import Message
 
@@ -17,6 +17,17 @@ from threadline.db.repositories.entries import EntryRepository
 from threadline.db.repositories.sources import SourceRepository
 from threadline.db.repositories.tags import TagRepository
 from threadline.ingest.models import Entry, Source, Tag, TagCreate
+
+# Available entry types for filtering
+ENTRY_TYPES = [
+    "thought",
+    "reflection",
+    "question",
+    "todo list",
+    "bullet list",
+    "summary",
+    "prayer",
+]
 
 # Color mapping for entry types
 ENTRY_TYPE_COLORS = {
@@ -102,6 +113,101 @@ class TagCheckbox(Static):
         label.update(f"{checkbox_char} [{color}]{self.tag.name}[/{color}]")
         # Post toggle message
         self.post_message(self.Toggled(self.tag, self.checked))
+
+
+class EntryTypeCheckbox(Static):
+    """A checkbox for filtering by entry type."""
+
+    class Toggled(Message):
+        """Message sent when entry type filter is toggled."""
+
+        def __init__(self, entry_type: str, checked: bool) -> None:
+            self.entry_type = entry_type
+            self.checked = checked
+            super().__init__()
+
+    def __init__(self, entry_type: str, checked: bool = False, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.entry_type = entry_type
+        self.checked = checked
+
+    def compose(self) -> ComposeResult:
+        checkbox_char = "[x]" if self.checked else "[ ]"
+        color = ENTRY_TYPE_COLORS.get(self.entry_type, "white")
+        yield Label(f"{checkbox_char} [{color}]{self.entry_type}[/{color}]")
+
+    def on_click(self) -> None:
+        """Toggle the checkbox when clicked."""
+        self.checked = not self.checked
+        # Update display
+        label = self.query_one(Label)
+        checkbox_char = "[x]" if self.checked else "[ ]"
+        color = ENTRY_TYPE_COLORS.get(self.entry_type, "white")
+        label.update(f"{checkbox_char} [{color}]{self.entry_type}[/{color}]")
+        # Post toggle message
+        self.post_message(self.Toggled(self.entry_type, self.checked))
+
+
+class FilterTagCheckbox(Static):
+    """A checkbox for filtering by tag (separate from the tagging tag picker)."""
+
+    class Toggled(Message):
+        """Message sent when tag filter is toggled."""
+
+        def __init__(self, tag: Tag, checked: bool) -> None:
+            self.tag = tag
+            self.checked = checked
+            super().__init__()
+
+    def __init__(self, tag: Tag, checked: bool = False, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.tag = tag
+        self.checked = checked
+
+    def compose(self) -> ComposeResult:
+        checkbox_char = "[x]" if self.checked else "[ ]"
+        color = self.tag.color or "white"
+        yield Label(f"{checkbox_char} [{color}]{self.tag.name}[/{color}]")
+
+    def on_click(self) -> None:
+        """Toggle the checkbox when clicked."""
+        self.checked = not self.checked
+        # Update display
+        label = self.query_one(Label)
+        checkbox_char = "[x]" if self.checked else "[ ]"
+        color = self.tag.color or "white"
+        label.update(f"{checkbox_char} [{color}]{self.tag.name}[/{color}]")
+        # Post toggle message
+        self.post_message(self.Toggled(self.tag, self.checked))
+
+
+class HideTodosToggle(Static):
+    """A toggle checkbox for hiding todo entries."""
+
+    class Toggled(Message):
+        """Message sent when hide todos is toggled."""
+
+        def __init__(self, checked: bool) -> None:
+            self.checked = checked
+            super().__init__()
+
+    def __init__(self, checked: bool = False, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.checked = checked
+
+    def compose(self) -> ComposeResult:
+        checkbox_char = "[x]" if self.checked else "[ ]"
+        yield Label(f"{checkbox_char} [red]Hide todos[/red]")
+
+    def on_click(self) -> None:
+        """Toggle the checkbox when clicked."""
+        self.checked = not self.checked
+        # Update display
+        label = self.query_one(Label)
+        checkbox_char = "[x]" if self.checked else "[ ]"
+        label.update(f"{checkbox_char} [red]Hide todos[/red]")
+        # Post toggle message
+        self.post_message(self.Toggled(self.checked))
 
 
 class ThreadlineApp(App):
@@ -215,6 +321,82 @@ class ThreadlineApp(App):
         color: $text-muted;
         padding-top: 1;
     }
+
+    #filter-panel {
+        display: none;
+        width: 45;
+        height: auto;
+        max-height: 30;
+        background: $surface;
+        border: solid $primary;
+        padding: 1;
+        layer: overlay;
+        dock: right;
+    }
+
+    #filter-panel.visible {
+        display: block;
+    }
+
+    #filter-panel-title {
+        text-style: bold;
+        padding-bottom: 1;
+    }
+
+    .filter-section {
+        padding: 1 0;
+    }
+
+    .filter-section-title {
+        text-style: bold;
+        color: $text;
+        padding-bottom: 1;
+    }
+
+    #filter-types {
+        height: auto;
+        max-height: 10;
+        overflow-y: auto;
+    }
+
+    #filter-tags {
+        height: auto;
+        max-height: 8;
+        overflow-y: auto;
+    }
+
+    EntryTypeCheckbox {
+        height: 1;
+        padding: 0 1;
+    }
+
+    EntryTypeCheckbox:hover {
+        background: $primary-background;
+    }
+
+    FilterTagCheckbox {
+        height: 1;
+        padding: 0 1;
+    }
+
+    FilterTagCheckbox:hover {
+        background: $primary-background;
+    }
+
+    HideTodosToggle {
+        height: 1;
+        padding: 0 1;
+        margin-bottom: 1;
+    }
+
+    HideTodosToggle:hover {
+        background: $primary-background;
+    }
+
+    #filter-panel-help {
+        color: $text-muted;
+        padding-top: 1;
+    }
     """
 
     BINDINGS = [
@@ -224,10 +406,12 @@ class ThreadlineApp(App):
         Binding("down", "cursor_down", "Down", show=False),
         Binding("up", "cursor_up", "Up", show=False),
         Binding("enter", "view_entry", "View", show=True),
-        Binding("escape", "close_detail_or_tag_picker", "Back", show=False),
+        Binding("escape", "close_overlay", "Back", show=False),
         Binding("o", "open_source", "Open", show=True),
         Binding("t", "toggle_tag_picker", "Tag", show=True),
         Binding("n", "new_tag", "New Tag", show=False),
+        Binding("f", "toggle_filter_panel", "Filter", show=True),
+        Binding("c", "clear_filters", "Clear", show=False),
     ]
 
     # Reactive state
@@ -237,10 +421,19 @@ class ThreadlineApp(App):
     selected_entry: Entry | None = None
     selected_source: Source | None = None
 
+    # Filter state (persists during session)
+    _filter_entry_types: set[str]
+    _filter_tag_ids: set[int]
+    _hide_todos: bool
+
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._entries: list[Entry] = []
         self._all_loaded = False
+        # Initialize filter state
+        self._filter_entry_types = set()
+        self._filter_tag_ids = set()
+        self._hide_todos = False
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -258,6 +451,25 @@ class ThreadlineApp(App):
             Static("[n] New tag  [Esc] Close", id="tag-picker-help"),
             id="tag-picker",
         )
+        yield Container(
+            Static("Filters", id="filter-panel-title"),
+            Container(
+                HideTodosToggle(checked=False, id="hide-todos-toggle"),
+                classes="filter-section",
+            ),
+            Container(
+                Static("Entry Types", classes="filter-section-title"),
+                Vertical(id="filter-types"),
+                classes="filter-section",
+            ),
+            Container(
+                Static("Tags", classes="filter-section-title"),
+                Vertical(id="filter-tags"),
+                classes="filter-section",
+            ),
+            Static("[c] Clear all  [Esc] Close", id="filter-panel-help"),
+            id="filter-panel",
+        )
         yield Footer()
 
     def on_mount(self) -> None:
@@ -265,14 +477,43 @@ class ThreadlineApp(App):
         self._load_entries()
         self._update_status()
 
+    def _get_active_entry_type_filter(self) -> list[str] | None:
+        """Get the active entry type filter, combining explicit selection and hide todos."""
+        # Start with explicitly selected entry types (if any)
+        selected_types = set(self._filter_entry_types)
+
+        if self._hide_todos:
+            # If hiding todos and we have specific types selected, remove todo list from them
+            if selected_types:
+                selected_types.discard("todo list")
+            else:
+                # If no specific types selected, include all except todo list
+                selected_types = set(ENTRY_TYPES) - {"todo list"}
+
+        # Return None if no filters (show all)
+        if not selected_types and not self._hide_todos:
+            return None
+
+        return list(selected_types) if selected_types else None
+
     def _load_entries(self, append: bool = False) -> None:
         """Load entries from database."""
         with get_db() as db:
             repo = EntryRepository(db.conn)
-            self.total_entries = repo.count()
+
+            # Build filter parameters
+            entry_types = self._get_active_entry_type_filter()
+            tag_ids = list(self._filter_tag_ids) if self._filter_tag_ids else None
+
+            self.total_entries = repo.count(entry_types=entry_types, tag_ids=tag_ids)
 
             offset = self.current_offset if append else 0
-            entries = repo.list(limit=self.page_size, offset=offset)
+            entries = repo.list(
+                limit=self.page_size,
+                offset=offset,
+                entry_types=entry_types,
+                tag_ids=tag_ids,
+            )
 
             if not append:
                 self._entries = entries
@@ -292,10 +533,27 @@ class ThreadlineApp(App):
             list_view.append(EntryListItem(entry, id=f"entry-{entry.id}"))
 
     def _update_status(self) -> None:
-        """Update the status bar."""
+        """Update the status bar with entry count and active filters."""
         status = self.query_one("#status-bar", Static)
         loaded = len(self._entries)
-        status.update(f"Entries: {loaded}/{self.total_entries}")
+
+        # Build filter indicator
+        filter_parts = []
+        if self._hide_todos:
+            filter_parts.append("[red]no todos[/red]")
+        if self._filter_entry_types:
+            type_count = len(self._filter_entry_types)
+            filter_parts.append(f"[cyan]{type_count} type{'s' if type_count > 1 else ''}[/cyan]")
+        if self._filter_tag_ids:
+            tag_count = len(self._filter_tag_ids)
+            filter_parts.append(f"[magenta]{tag_count} tag{'s' if tag_count > 1 else ''}[/magenta]")
+
+        if filter_parts:
+            filter_text = " | Filters: " + ", ".join(filter_parts)
+        else:
+            filter_text = ""
+
+        status.update(f"Entries: {loaded}/{self.total_entries}{filter_text}")
 
     def action_cursor_down(self) -> None:
         """Move cursor down in the list."""
@@ -364,13 +622,19 @@ class ThreadlineApp(App):
         list_view.display = False
         detail_view.add_class("visible")
 
-    def action_close_detail_or_tag_picker(self) -> None:
-        """Close the tag picker or detail view."""
+    def action_close_overlay(self) -> None:
+        """Close the filter panel, tag picker, or detail view (in priority order)."""
+        filter_panel = self.query_one("#filter-panel", Container)
         tag_picker = self.query_one("#tag-picker", Container)
         detail_view = self.query_one("#detail-view", Container)
         list_view = self.query_one("#entry-list", ListView)
 
-        # First close tag picker if open
+        # First close filter panel if open
+        if filter_panel.has_class("visible"):
+            filter_panel.remove_class("visible")
+            return
+
+        # Then close tag picker if open
         if tag_picker.has_class("visible"):
             tag_picker.remove_class("visible")
             return
@@ -557,6 +821,85 @@ class ThreadlineApp(App):
         # Refresh the picker to show the new tag
         tag_filter.value = ""
         self._refresh_tag_picker()
+
+    def action_toggle_filter_panel(self) -> None:
+        """Toggle the filter panel overlay."""
+        filter_panel = self.query_one("#filter-panel", Container)
+
+        if filter_panel.has_class("visible"):
+            filter_panel.remove_class("visible")
+        else:
+            self._refresh_filter_panel()
+            filter_panel.add_class("visible")
+
+    def _refresh_filter_panel(self) -> None:
+        """Refresh the filter panel with current state."""
+        # Refresh entry type checkboxes
+        filter_types = self.query_one("#filter-types", Vertical)
+        filter_types.remove_children()
+        for entry_type in ENTRY_TYPES:
+            is_checked = entry_type in self._filter_entry_types
+            filter_types.mount(EntryTypeCheckbox(entry_type, checked=is_checked))
+
+        # Refresh tag checkboxes
+        filter_tags = self.query_one("#filter-tags", Vertical)
+        filter_tags.remove_children()
+        with get_db() as db:
+            tag_repo = TagRepository(db.conn)
+            all_tags = tag_repo.list()
+        for tag in all_tags:
+            is_checked = tag.id in self._filter_tag_ids
+            filter_tags.mount(FilterTagCheckbox(tag, checked=is_checked))
+
+        # Update hide todos toggle display
+        hide_todos_toggle = self.query_one("#hide-todos-toggle", HideTodosToggle)
+        hide_todos_toggle.checked = self._hide_todos
+        label = hide_todos_toggle.query_one(Label)
+        checkbox_char = "[x]" if self._hide_todos else "[ ]"
+        label.update(f"{checkbox_char} [red]Hide todos[/red]")
+
+    def on_entry_type_checkbox_toggled(self, event: EntryTypeCheckbox.Toggled) -> None:
+        """Handle entry type filter toggle."""
+        if event.checked:
+            self._filter_entry_types.add(event.entry_type)
+        else:
+            self._filter_entry_types.discard(event.entry_type)
+        self._apply_filters()
+
+    def on_filter_tag_checkbox_toggled(self, event: FilterTagCheckbox.Toggled) -> None:
+        """Handle tag filter toggle."""
+        if event.checked:
+            self._filter_tag_ids.add(event.tag.id)
+        else:
+            self._filter_tag_ids.discard(event.tag.id)
+        self._apply_filters()
+
+    def _apply_filters(self) -> None:
+        """Apply current filters and reload entries."""
+        # Reset pagination state
+        self.current_offset = 0
+        self._all_loaded = False
+        # Reload entries with filters
+        self._load_entries(append=False)
+        self._update_status()
+
+    def action_clear_filters(self) -> None:
+        """Clear all active filters."""
+        self._filter_entry_types.clear()
+        self._filter_tag_ids.clear()
+        self._hide_todos = False
+
+        # Refresh filter panel if visible
+        filter_panel = self.query_one("#filter-panel", Container)
+        if filter_panel.has_class("visible"):
+            self._refresh_filter_panel()
+
+        self._apply_filters()
+
+    def on_hide_todos_toggle_toggled(self, event: HideTodosToggle.Toggled) -> None:
+        """Handle hide todos toggle."""
+        self._hide_todos = event.checked
+        self._apply_filters()
 
 
 def run_browse() -> None:
