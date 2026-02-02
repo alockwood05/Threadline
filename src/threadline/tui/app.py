@@ -7,14 +7,16 @@ import subprocess
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, VerticalScroll
-from textual.widgets import Footer, Header, Static, ListItem, ListView, Label
+from textual.containers import Container, Vertical
+from textual.widgets import Footer, Header, Static, ListItem, ListView, Label, Input, Checkbox
 from textual.reactive import reactive
+from textual.message import Message
 
 from threadline.db.connection import get_db
 from threadline.db.repositories.entries import EntryRepository
 from threadline.db.repositories.sources import SourceRepository
-from threadline.ingest.models import Entry, Source
+from threadline.db.repositories.tags import TagRepository
+from threadline.ingest.models import Entry, Source, Tag, TagCreate
 
 # Color mapping for entry types
 ENTRY_TYPE_COLORS = {
@@ -50,10 +52,11 @@ class EntryCard(Static):
         if len(quote) > 80:
             quote = quote[:77] + "..."
 
-        # Format: title | quote | type badge
+        # Format: title | quote | type badge | tag indicator
         type_badge = get_type_badge(self.entry.entry_type)
+        tag_indicator = f" [bright_magenta][{len(self.entry.tags)} tags][/bright_magenta]" if self.entry.tags else ""
 
-        yield Label(f"[bold]{title}[/bold]  {type_badge}")
+        yield Label(f"[bold]{title}[/bold]  {type_badge}{tag_indicator}")
         yield Label(f"[dim]{quote}[/dim]", classes="quote")
 
 
@@ -66,6 +69,39 @@ class EntryListItem(ListItem):
 
     def compose(self) -> ComposeResult:
         yield EntryCard(self.entry)
+
+
+class TagCheckbox(Static):
+    """A checkbox for a single tag."""
+
+    class Toggled(Message):
+        """Message sent when tag is toggled."""
+
+        def __init__(self, tag: Tag, checked: bool) -> None:
+            self.tag = tag
+            self.checked = checked
+            super().__init__()
+
+    def __init__(self, tag: Tag, checked: bool = False, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.tag = tag
+        self.checked = checked
+
+    def compose(self) -> ComposeResult:
+        checkbox_char = "[x]" if self.checked else "[ ]"
+        color = self.tag.color or "white"
+        yield Label(f"{checkbox_char} [{color}]{self.tag.name}[/{color}]")
+
+    def on_click(self) -> None:
+        """Toggle the checkbox when clicked."""
+        self.checked = not self.checked
+        # Update display
+        label = self.query_one(Label)
+        checkbox_char = "[x]" if self.checked else "[ ]"
+        color = self.tag.color or "white"
+        label.update(f"{checkbox_char} [{color}]{self.tag.name}[/{color}]")
+        # Post toggle message
+        self.post_message(self.Toggled(self.tag, self.checked))
 
 
 class ThreadlineApp(App):
@@ -134,6 +170,51 @@ class ThreadlineApp(App):
         color: $text-muted;
         padding: 0 0 1 0;
     }
+
+    #tag-picker {
+        display: none;
+        width: 40;
+        height: auto;
+        max-height: 20;
+        background: $surface;
+        border: solid $primary;
+        padding: 1;
+        layer: overlay;
+        dock: right;
+    }
+
+    #tag-picker.visible {
+        display: block;
+    }
+
+    #tag-picker-title {
+        text-style: bold;
+        padding-bottom: 1;
+    }
+
+    #tag-filter {
+        margin-bottom: 1;
+    }
+
+    #tag-list {
+        height: auto;
+        max-height: 12;
+        overflow-y: auto;
+    }
+
+    TagCheckbox {
+        height: 1;
+        padding: 0 1;
+    }
+
+    TagCheckbox:hover {
+        background: $primary-background;
+    }
+
+    #tag-picker-help {
+        color: $text-muted;
+        padding-top: 1;
+    }
     """
 
     BINDINGS = [
@@ -143,8 +224,10 @@ class ThreadlineApp(App):
         Binding("down", "cursor_down", "Down", show=False),
         Binding("up", "cursor_up", "Up", show=False),
         Binding("enter", "view_entry", "View", show=True),
-        Binding("escape", "close_detail", "Back", show=False),
+        Binding("escape", "close_detail_or_tag_picker", "Back", show=False),
         Binding("o", "open_source", "Open", show=True),
+        Binding("t", "toggle_tag_picker", "Tag", show=True),
+        Binding("n", "new_tag", "New Tag", show=False),
     ]
 
     # Reactive state
@@ -167,6 +250,13 @@ class ThreadlineApp(App):
             Static("", id="detail-meta"),
             Static("", id="detail-content"),
             id="detail-view",
+        )
+        yield Container(
+            Static("Tags", id="tag-picker-title"),
+            Input(placeholder="Filter tags...", id="tag-filter"),
+            Vertical(id="tag-list"),
+            Static("[n] New tag  [Esc] Close", id="tag-picker-help"),
+            id="tag-picker",
         )
         yield Footer()
 
@@ -274,11 +364,18 @@ class ThreadlineApp(App):
         list_view.display = False
         detail_view.add_class("visible")
 
-    def action_close_detail(self) -> None:
-        """Close the detail view and return to list."""
+    def action_close_detail_or_tag_picker(self) -> None:
+        """Close the tag picker or detail view."""
+        tag_picker = self.query_one("#tag-picker", Container)
         detail_view = self.query_one("#detail-view", Container)
         list_view = self.query_one("#entry-list", ListView)
 
+        # First close tag picker if open
+        if tag_picker.has_class("visible"):
+            tag_picker.remove_class("visible")
+            return
+
+        # Then close detail view if open
         if detail_view.has_class("visible"):
             detail_view.remove_class("visible")
             list_view.display = True
@@ -303,6 +400,163 @@ class ThreadlineApp(App):
         # Suspend the app and open the editor
         with self.suspend():
             subprocess.run([editor, filepath])
+
+    def action_toggle_tag_picker(self) -> None:
+        """Toggle the tag picker overlay."""
+        list_view = self.query_one("#entry-list", ListView)
+        detail_view = self.query_one("#detail-view", Container)
+        tag_picker = self.query_one("#tag-picker", Container)
+
+        # Get the currently selected entry
+        if detail_view.has_class("visible"):
+            entry = self.selected_entry
+        elif list_view.index is not None and list_view.index < len(self._entries):
+            entry = self._entries[list_view.index]
+        else:
+            return  # No entry selected
+
+        if entry is None:
+            return
+
+        if tag_picker.has_class("visible"):
+            # Close the tag picker
+            tag_picker.remove_class("visible")
+        else:
+            # Open the tag picker
+            self._tagging_entry = entry
+            self._refresh_tag_picker()
+            tag_picker.add_class("visible")
+            # Focus the filter input
+            tag_filter = self.query_one("#tag-filter", Input)
+            tag_filter.value = ""
+            tag_filter.focus()
+
+    def _refresh_tag_picker(self, filter_text: str = "") -> None:
+        """Refresh the tag picker list."""
+        tag_list = self.query_one("#tag-list", Vertical)
+        tag_list.remove_children()
+
+        with get_db() as db:
+            tag_repo = TagRepository(db.conn)
+            all_tags = tag_repo.list()
+            entry_tag_ids = tag_repo.get_entry_tag_ids(self._tagging_entry.id) if hasattr(self, "_tagging_entry") and self._tagging_entry else []
+
+        # Filter tags
+        filter_lower = filter_text.lower()
+        for tag in all_tags:
+            if filter_lower and filter_lower not in tag.name.lower():
+                continue
+            is_checked = tag.id in entry_tag_ids
+            tag_list.mount(TagCheckbox(tag, checked=is_checked))
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Handle filter input changes."""
+        if event.input.id == "tag-filter":
+            self._refresh_tag_picker(event.value)
+
+    def on_tag_checkbox_toggled(self, event: TagCheckbox.Toggled) -> None:
+        """Handle tag checkbox toggle."""
+        if not hasattr(self, "_tagging_entry") or self._tagging_entry is None:
+            return
+
+        with get_db() as db:
+            tag_repo = TagRepository(db.conn)
+            if event.checked:
+                tag_repo.add_tag_to_entry(self._tagging_entry.id, event.tag.id)
+            else:
+                tag_repo.remove_tag_from_entry(self._tagging_entry.id, event.tag.id)
+
+            # Update the entry's tags list
+            entry_repo = EntryRepository(db.conn)
+            updated_entry = entry_repo.get(self._tagging_entry.id)
+            if updated_entry:
+                self._tagging_entry.tags = updated_entry.tags
+                # Update the entry in the list too
+                for i, e in enumerate(self._entries):
+                    if e.id == self._tagging_entry.id:
+                        self._entries[i].tags = updated_entry.tags
+                        break
+
+        # Refresh the list item display
+        self._refresh_entry_display(self._tagging_entry.id)
+
+        # Update detail view if visible
+        detail_view = self.query_one("#detail-view", Container)
+        if detail_view.has_class("visible") and self.selected_entry and self.selected_entry.id == self._tagging_entry.id:
+            self.selected_entry = self._tagging_entry
+            self._update_detail_meta()
+
+    def _refresh_entry_display(self, entry_id: int) -> None:
+        """Refresh the display of a specific entry in the list."""
+        list_view = self.query_one("#entry-list", ListView)
+        try:
+            item = self.query_one(f"#entry-{entry_id}", EntryListItem)
+            # Find the entry and rebuild the item
+            for entry in self._entries:
+                if entry.id == entry_id:
+                    # Replace the list item
+                    index = list(list_view.children).index(item)
+                    item.remove()
+                    new_item = EntryListItem(entry, id=f"entry-{entry.id}")
+                    list_view.mount(new_item, before=index)
+                    list_view.index = index
+                    break
+        except Exception:
+            pass  # Item not found, ignore
+
+    def _update_detail_meta(self) -> None:
+        """Update the detail view metadata."""
+        if not self.selected_entry:
+            return
+
+        detail_meta = self.query_one("#detail-meta", Static)
+        entry = self.selected_entry
+
+        meta_parts = []
+        if entry.entry_date:
+            meta_parts.append(f"Date: {entry.entry_date.isoformat()}")
+        if entry.entry_type:
+            confidence = entry.entry_type_confidence or 0
+            uncertain = " (uncertain)" if confidence < 0.7 else ""
+            meta_parts.append(f"Type: {entry.entry_type}{uncertain}")
+        if entry.location:
+            meta_parts.append(f"Location: {entry.location}")
+        if entry.tags:
+            meta_parts.append(f"Tags: {', '.join(entry.tags)}")
+        if self.selected_source:
+            meta_parts.append(f"Source: {self.selected_source.filepath}")
+
+        meta_text = " | ".join(meta_parts) if meta_parts else "No metadata"
+        detail_meta.update(meta_text)
+
+    def action_new_tag(self) -> None:
+        """Create a new tag from the filter input."""
+        tag_picker = self.query_one("#tag-picker", Container)
+        if not tag_picker.has_class("visible"):
+            return
+
+        tag_filter = self.query_one("#tag-filter", Input)
+        new_tag_name = tag_filter.value.strip()
+
+        if not new_tag_name:
+            return
+
+        with get_db() as db:
+            tag_repo = TagRepository(db.conn)
+            # Check if tag already exists
+            existing = tag_repo.get_by_name(new_tag_name)
+            if existing:
+                # Tag already exists, just refresh to show it
+                self._refresh_tag_picker()
+                return
+
+            # Create new tag
+            tag_create = TagCreate(name=new_tag_name)
+            tag_repo.create(tag_create)
+
+        # Refresh the picker to show the new tag
+        tag_filter.value = ""
+        self._refresh_tag_picker()
 
 
 def run_browse() -> None:

@@ -336,12 +336,12 @@ View full entry content with metadata.
 #### F2.3: Quick Tagging
 Tag entries without leaving list view.
 
-- [ ] `t` opens tag picker overlay
-- [ ] Shows existing tags with checkbox (toggle on/off)
-- [ ] Type to filter/search tags
-- [ ] `n` to create new tag inline
-- [ ] Changes save immediately
-- [ ] Visual indicator on list row if entry has tags
+- [x] `t` opens tag picker overlay
+- [x] Shows existing tags with checkbox (toggle on/off)
+- [x] Type to filter/search tags
+- [x] `n` to create new tag inline
+- [x] Changes save immediately
+- [x] Visual indicator on list row if entry has tags
 
 #### F2.4: Filtering
 Filter entries by type and tags.

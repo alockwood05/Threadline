@@ -107,3 +107,21 @@ class IngestResult:
     files_failed: int = 0
     entries_created: int = 0
     errors: list[str] = field(default_factory=list)
+
+
+@dataclass
+class TagCreate:
+    """Data for creating a new tag."""
+
+    name: str
+    color: str | None = None
+
+
+@dataclass
+class Tag:
+    """A tag record."""
+
+    id: int
+    name: str
+    color: str | None
+    created_at: datetime

@@ -313,3 +313,149 @@ class TestOCRImageDetection:
 
         # Should not crash with unknown option error
         assert "No such option" not in result.output, "OCR flag not recognized"
+
+
+class TestTagRepository:
+    """Tests for tag repository functionality."""
+
+    def test_tag_create_and_list(self, initialized_threadline: Path) -> None:
+        """Tags can be created and listed."""
+        from threadline.db.connection import Database
+        from threadline.db.repositories.tags import TagRepository
+        from threadline.ingest.models import TagCreate
+
+        db = Database(initialized_threadline / "threadline.db")
+        tag_repo = TagRepository(db.conn)
+
+        # Create a tag
+        tag_id = tag_repo.create(TagCreate(name="important", color="red"))
+        assert tag_id > 0, "Tag ID should be positive"
+
+        # List tags
+        tags = tag_repo.list()
+        assert len(tags) == 1, "Expected 1 tag"
+        assert tags[0].name == "important"
+        assert tags[0].color == "red"
+
+        db.close()
+
+    def test_tag_get_by_name(self, initialized_threadline: Path) -> None:
+        """Tags can be retrieved by name."""
+        from threadline.db.connection import Database
+        from threadline.db.repositories.tags import TagRepository
+        from threadline.ingest.models import TagCreate
+
+        db = Database(initialized_threadline / "threadline.db")
+        tag_repo = TagRepository(db.conn)
+
+        # Create a tag
+        tag_repo.create(TagCreate(name="TestTag"))
+
+        # Get by name (case-insensitive)
+        tag = tag_repo.get_by_name("testtag")
+        assert tag is not None, "Tag not found by name"
+        assert tag.name == "TestTag"
+
+        db.close()
+
+    def test_add_tag_to_entry(
+        self, initialized_threadline: Path, sample_markdown: Path
+    ) -> None:
+        """Tags can be added to entries."""
+        # First ingest a file
+        runner.invoke(app, ["ingest", str(sample_markdown), "--no-embeddings"])
+
+        from threadline.db.connection import Database
+        from threadline.db.repositories.tags import TagRepository
+        from threadline.db.repositories.entries import EntryRepository
+        from threadline.ingest.models import TagCreate
+
+        db = Database(initialized_threadline / "threadline.db")
+        tag_repo = TagRepository(db.conn)
+        entry_repo = EntryRepository(db.conn)
+
+        # Create a tag
+        tag_id = tag_repo.create(TagCreate(name="mytag"))
+
+        # Get an entry
+        entries = entry_repo.list()
+        assert len(entries) > 0, "No entries to tag"
+        entry_id = entries[0].id
+
+        # Add tag to entry
+        tag_repo.add_tag_to_entry(entry_id, tag_id)
+
+        # Verify entry now has the tag
+        entry = entry_repo.get(entry_id)
+        assert entry is not None
+        assert "mytag" in entry.tags, f"Tag not found in entry tags: {entry.tags}"
+
+        db.close()
+
+    def test_remove_tag_from_entry(
+        self, initialized_threadline: Path, sample_markdown: Path
+    ) -> None:
+        """Tags can be removed from entries."""
+        runner.invoke(app, ["ingest", str(sample_markdown), "--no-embeddings"])
+
+        from threadline.db.connection import Database
+        from threadline.db.repositories.tags import TagRepository
+        from threadline.db.repositories.entries import EntryRepository
+        from threadline.ingest.models import TagCreate
+
+        db = Database(initialized_threadline / "threadline.db")
+        tag_repo = TagRepository(db.conn)
+        entry_repo = EntryRepository(db.conn)
+
+        # Create and add a tag
+        tag_id = tag_repo.create(TagCreate(name="removeme"))
+        entries = entry_repo.list()
+        entry_id = entries[0].id
+        tag_repo.add_tag_to_entry(entry_id, tag_id)
+
+        # Verify tag is present
+        entry = entry_repo.get(entry_id)
+        assert "removeme" in entry.tags
+
+        # Remove the tag
+        tag_repo.remove_tag_from_entry(entry_id, tag_id)
+
+        # Verify tag is gone
+        entry = entry_repo.get(entry_id)
+        assert "removeme" not in entry.tags, "Tag should have been removed"
+
+        db.close()
+
+    def test_entry_tag_indicator_in_tui_model(
+        self, initialized_threadline: Path, sample_markdown: Path
+    ) -> None:
+        """Entries with tags have them populated in the model."""
+        runner.invoke(app, ["ingest", str(sample_markdown), "--no-embeddings"])
+
+        from threadline.db.connection import Database
+        from threadline.db.repositories.tags import TagRepository
+        from threadline.db.repositories.entries import EntryRepository
+        from threadline.ingest.models import TagCreate
+
+        db = Database(initialized_threadline / "threadline.db")
+        tag_repo = TagRepository(db.conn)
+        entry_repo = EntryRepository(db.conn)
+
+        # Create tags and assign to entry
+        tag1_id = tag_repo.create(TagCreate(name="tag1"))
+        tag2_id = tag_repo.create(TagCreate(name="tag2"))
+
+        entries = entry_repo.list()
+        entry_id = entries[0].id
+        tag_repo.add_tag_to_entry(entry_id, tag1_id)
+        tag_repo.add_tag_to_entry(entry_id, tag2_id)
+
+        # Re-fetch entry through list() which populates tags
+        entries = entry_repo.list()
+        tagged_entry = next(e for e in entries if e.id == entry_id)
+
+        assert len(tagged_entry.tags) == 2, f"Expected 2 tags, got {len(tagged_entry.tags)}"
+        assert "tag1" in tagged_entry.tags
+        assert "tag2" in tagged_entry.tags
+
+        db.close()
