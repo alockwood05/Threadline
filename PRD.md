@@ -370,15 +370,15 @@ Display algorithmically-extracted themes.
 #### F3.1: Local Theme Extraction with BERTopic
 Extract themes using embeddings - no LLM required.
 
-- [ ] `threadline extract-themes` runs extraction
-- [ ] Pipeline: stored embeddings → UMAP (dimensionality reduction) → HDBSCAN (clustering) → c-TF-IDF (keywords)
-- [ ] Automatically determines optimal number of themes (no manual count needed)
-- [ ] Option: `--min-topic-size=10` to control granularity
-- [ ] Stores results in `themes` and `entry_themes` tables
-- [ ] Saves representative documents per theme
-- [ ] Re-runnable (clears and regenerates)
-- [ ] Completes in <30 seconds for 1000 entries on CPU
-- [ ] Records run metadata in `model_runs`
+- [x] `threadline extract-themes` runs extraction
+- [x] Pipeline: stored embeddings → UMAP (dimensionality reduction) → HDBSCAN (clustering) → c-TF-IDF (keywords)
+- [x] Automatically determines optimal number of themes (no manual count needed)
+- [x] Option: `--min-topic-size=10` to control granularity
+- [x] Stores results in `themes` and `entry_themes` tables
+- [x] Saves representative documents per theme
+- [x] Re-runnable (clears and regenerates)
+- [x] Completes in <30 seconds for 1000 entries on CPU
+- [x] Records run metadata in `model_runs`
 
 #### F3.2: Similarity Search *(local)*
 Find similar entries using embeddings.

@@ -125,3 +125,37 @@ class Tag:
     name: str
     color: str | None
     created_at: datetime
+
+
+@dataclass
+class ThemeCreate:
+    """Data for creating a theme."""
+
+    topic_id: int
+    name: str
+    keywords: str | None = None  # JSON string
+    representative_docs: str | None = None  # JSON string of entry IDs
+    entry_count: int = 0
+
+
+@dataclass
+class Theme:
+    """A theme record."""
+
+    id: int
+    topic_id: int
+    name: str
+    keywords: str | None
+    representative_docs: str | None
+    entry_count: int
+    created_at: datetime
+
+
+@dataclass
+class ThemeExtractionResult:
+    """Result of theme extraction."""
+
+    themes_created: int = 0
+    entries_assigned: int = 0
+    outlier_entries: int = 0  # entries assigned to topic -1
+    errors: list[str] = field(default_factory=list)

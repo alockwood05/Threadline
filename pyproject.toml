@@ -45,6 +45,7 @@ ml-full = [
     "bertopic>=0.16.0",
     "umap-learn>=0.5.0",
     "hdbscan>=0.8.0",
+    "scikit-learn>=1.0.0",
 ]
 
 # Handwriting OCR
