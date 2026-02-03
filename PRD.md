@@ -405,11 +405,11 @@ Manage tags from command line.
 #### F4.1: Export Filtered Entries
 Export entries matching filters.
 
-- [ ] `threadline export --filter-type=thought --tag=important -o output.md`
-- [ ] Formats as markdown with headers per entry
-- [ ] Includes metadata (date, source link, tags)
-- [ ] Option: `--format=json` for structured export
-- [ ] Option: `--include-similar` to include related entries
+- [x] `threadline export --filter-type=thought --tag=important -o output.md`
+- [x] Formats as markdown with headers per entry
+- [x] Includes metadata (date, source link, tags)
+- [x] Option: `--format=json` for structured export
+- [x] Option: `--include-similar` to include related entries
 
 #### F4.2: Re-process Entries
 Re-run processing on existing entries.

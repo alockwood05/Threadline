@@ -41,6 +41,7 @@ from threadline.cli.stats import stats_cmd
 from threadline.cli.browse import browse_cmd
 from threadline.cli.themes import extract_themes_cmd
 from threadline.cli.similar import similar_cmd
+from threadline.cli.export import export_cmd
 from threadline.cli import tags as tags_cli
 
 app.command(name="init")(init_cmd)
@@ -49,6 +50,7 @@ app.command(name="stats")(stats_cmd)
 app.command(name="browse")(browse_cmd)
 app.command(name="extract-themes")(extract_themes_cmd)
 app.command(name="similar")(similar_cmd)
+app.command(name="export")(export_cmd)
 
 # Register subcommand groups
 app.add_typer(tags_cli.app, name="tags")

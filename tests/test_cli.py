@@ -600,3 +600,128 @@ class TestTagsCLI:
         assert "fromtag" not in entry.tags, "Entry should not have fromtag"
 
         db.close()
+
+
+class TestExport:
+    """Tests for `threadline export` command."""
+
+    def test_export_markdown_basic(
+        self, initialized_threadline: Path, sample_markdown: Path, tmp_path: Path
+    ) -> None:
+        """Export entries to markdown format."""
+        # Ingest a file first
+        runner.invoke(app, ["ingest", str(sample_markdown), "--no-embeddings"])
+
+        output_file = tmp_path / "export.md"
+        result = runner.invoke(app, ["export", "-o", str(output_file)])
+
+        assert result.exit_code == 0, f"Export failed: {result.output}"
+        assert output_file.exists(), "Output file not created"
+
+        content = output_file.read_text()
+        assert "# Threadline Export" in content
+        assert "Total entries:" in content
+
+    def test_export_json_basic(
+        self, initialized_threadline: Path, sample_markdown: Path, tmp_path: Path
+    ) -> None:
+        """Export entries to JSON format."""
+        runner.invoke(app, ["ingest", str(sample_markdown), "--no-embeddings"])
+
+        output_file = tmp_path / "export.json"
+        result = runner.invoke(app, ["export", "-o", str(output_file), "--format=json"])
+
+        assert result.exit_code == 0, f"Export failed: {result.output}"
+        assert output_file.exists(), "Output file not created"
+
+        import json
+        data = json.loads(output_file.read_text())
+        assert "metadata" in data
+        assert "entries" in data
+        assert len(data["entries"]) > 0
+
+    def test_export_filter_by_type(
+        self, initialized_threadline: Path, sample_markdown: Path, tmp_path: Path
+    ) -> None:
+        """Export with --filter-type flag filters entries."""
+        runner.invoke(app, ["ingest", str(sample_markdown), "--no-embeddings"])
+
+        output_file = tmp_path / "export.md"
+        # Filter by a type that may not exist
+        result = runner.invoke(
+            app, ["export", "-o", str(output_file), "--filter-type=nonexistent_type"]
+        )
+
+        # Should complete without error
+        assert result.exit_code == 0, f"Export failed: {result.output}"
+
+    def test_export_filter_by_tag(
+        self, initialized_threadline: Path, sample_markdown: Path, tmp_path: Path
+    ) -> None:
+        """Export with --tag flag filters entries."""
+        # Ingest and tag an entry
+        runner.invoke(app, ["ingest", str(sample_markdown), "--no-embeddings"])
+        runner.invoke(app, ["tags", "create", "exporttag"])
+
+        from threadline.db.connection import Database
+        from threadline.db.repositories.tags import TagRepository
+        from threadline.db.repositories.entries import EntryRepository
+
+        db = Database(initialized_threadline / "threadline.db")
+        tag_repo = TagRepository(db.conn)
+        entry_repo = EntryRepository(db.conn)
+
+        tag = tag_repo.get_by_name("exporttag")
+        entries = entry_repo.list()
+        tag_repo.add_tag_to_entry(entries[0].id, tag.id)
+        db.close()
+
+        # Export only tagged entries
+        output_file = tmp_path / "export.md"
+        result = runner.invoke(app, ["export", "-o", str(output_file), "--tag=exporttag"])
+
+        assert result.exit_code == 0, f"Export failed: {result.output}"
+        assert "Exported 1 entries" in result.output
+
+    def test_export_json_includes_metadata(
+        self, initialized_threadline: Path, sample_markdown: Path, tmp_path: Path
+    ) -> None:
+        """JSON export includes entry metadata."""
+        runner.invoke(app, ["ingest", str(sample_markdown), "--no-embeddings"])
+
+        output_file = tmp_path / "export.json"
+        result = runner.invoke(app, ["export", "-o", str(output_file), "--format=json"])
+
+        assert result.exit_code == 0
+
+        import json
+        data = json.loads(output_file.read_text())
+
+        # Check first entry has expected fields
+        entry = data["entries"][0]
+        assert "id" in entry
+        assert "title" in entry
+        assert "content" in entry
+        assert "entry_type" in entry
+        assert "tags" in entry
+        assert "source" in entry
+
+    def test_export_no_entries_message(
+        self, initialized_threadline: Path, tmp_path: Path
+    ) -> None:
+        """Export shows message when no entries match filters."""
+        output_file = tmp_path / "export.md"
+        result = runner.invoke(app, ["export", "-o", str(output_file)])
+
+        assert result.exit_code == 0
+        assert "No entries match" in result.output
+
+    def test_export_invalid_format_fails(
+        self, initialized_threadline: Path, tmp_path: Path
+    ) -> None:
+        """Export with invalid format fails."""
+        output_file = tmp_path / "export.txt"
+        result = runner.invoke(app, ["export", "-o", str(output_file), "--format=txt"])
+
+        assert result.exit_code == 1
+        assert "Invalid format" in result.output
