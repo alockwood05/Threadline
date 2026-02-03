@@ -179,6 +179,55 @@ class EntryRepository:
         self.conn.commit()
         return cursor.rowcount > 0
 
+    def find_similar(self, entry_id: int, limit: int = 10) -> list[tuple[Entry, float]]:
+        """
+        Find similar entries using cosine similarity on embeddings.
+
+        Args:
+            entry_id: The entry to find similar entries for
+            limit: Maximum number of similar entries to return
+
+        Returns:
+            List of (entry, similarity_score) tuples, sorted by similarity (highest first)
+        """
+        from threadline.models.embedding import bytes_to_embedding, cosine_similarity
+
+        # Get the reference entry
+        reference = self.get(entry_id)
+        if not reference or not reference.embedding:
+            return []
+
+        # Convert reference embedding from bytes to numpy array
+        ref_embedding = bytes_to_embedding(reference.embedding)
+
+        # Get all entries with embeddings (excluding the reference entry)
+        rows = self.conn.execute(
+            """
+            SELECT * FROM entries
+            WHERE id != ? AND embedding IS NOT NULL
+            """,
+            (entry_id,),
+        ).fetchall()
+
+        # Calculate similarity scores
+        results: list[tuple[Entry, float]] = []
+        for row in rows:
+            entry = self._row_to_entry(row)
+            if entry.embedding:
+                entry_embedding = bytes_to_embedding(entry.embedding)
+                similarity = cosine_similarity(ref_embedding, entry_embedding)
+                results.append((entry, similarity))
+
+        # Sort by similarity (highest first) and limit
+        results.sort(key=lambda x: x[1], reverse=True)
+        results = results[:limit]
+
+        # Load tags for each entry
+        for entry, _ in results:
+            entry.tags = self._get_tags(entry.id)
+
+        return results
+
     def _get_tags(self, entry_id: int) -> list[str]:
         """Get tag names for an entry."""
         rows = self.conn.execute(

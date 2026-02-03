@@ -40,12 +40,14 @@ from threadline.cli.ingest import ingest_cmd
 from threadline.cli.stats import stats_cmd
 from threadline.cli.browse import browse_cmd
 from threadline.cli.themes import extract_themes_cmd
+from threadline.cli.similar import similar_cmd
 
 app.command(name="init")(init_cmd)
 app.command(name="ingest")(ingest_cmd)
 app.command(name="stats")(stats_cmd)
 app.command(name="browse")(browse_cmd)
 app.command(name="extract-themes")(extract_themes_cmd)
+app.command(name="similar")(similar_cmd)
 
 
 if __name__ == "__main__":

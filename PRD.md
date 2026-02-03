@@ -383,11 +383,11 @@ Extract themes using embeddings - no LLM required.
 #### F3.2: Similarity Search *(local)*
 Find similar entries using embeddings.
 
-- [ ] `s` in detail view shows similar entries
-- [ ] Uses cosine similarity via sqlite-vss
-- [ ] Returns top 10 similar entries with similarity scores
-- [ ] Navigate to any similar entry
-- [ ] Also available via CLI: `threadline similar <entry_id>`
+- [x] `s` in detail view shows similar entries
+- [x] Uses cosine similarity on embeddings
+- [x] Returns top 10 similar entries with similarity scores
+- [x] Navigate to any similar entry
+- [x] Also available via CLI: `threadline similar <entry_id>`
 
 #### F3.3: Tag Management CLI
 Manage tags from command line.

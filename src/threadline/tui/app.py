@@ -71,6 +71,27 @@ class EntryCard(Static):
         yield Label(f"[dim]{quote}[/dim]", classes="quote")
 
 
+class SimilarEntryCard(Static):
+    """A card showing a similar entry with similarity score."""
+
+    def __init__(self, entry: Entry, similarity: float, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.entry = entry
+        self.similarity = similarity
+
+    def compose(self) -> ComposeResult:
+        title = self.entry.title or "Untitled"
+        quote = self.entry.summary_quote or self.entry.content[:60]
+        if len(quote) > 60:
+            quote = quote[:57] + "..."
+
+        type_badge = get_type_badge(self.entry.entry_type)
+        similarity_pct = f"[green]{self.similarity * 100:.1f}%[/green]"
+
+        yield Label(f"{similarity_pct} [bold]{title}[/bold]  {type_badge}")
+        yield Label(f"[dim]{quote}[/dim]", classes="quote")
+
+
 class EntryListItem(ListItem):
     """A list item containing an entry card."""
 
@@ -80,6 +101,18 @@ class EntryListItem(ListItem):
 
     def compose(self) -> ComposeResult:
         yield EntryCard(self.entry)
+
+
+class SimilarEntryListItem(ListItem):
+    """A list item containing a similar entry card."""
+
+    def __init__(self, entry: Entry, similarity: float, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.entry = entry
+        self.similarity = similarity
+
+    def compose(self) -> ComposeResult:
+        yield SimilarEntryCard(self.entry, self.similarity)
 
 
 class TagCheckbox(Static):
@@ -397,6 +430,38 @@ class ThreadlineApp(App):
         color: $text-muted;
         padding-top: 1;
     }
+
+    #similar-panel {
+        display: none;
+        width: 60;
+        height: auto;
+        max-height: 30;
+        background: $surface;
+        border: solid $primary;
+        padding: 1;
+        layer: overlay;
+        dock: right;
+    }
+
+    #similar-panel.visible {
+        display: block;
+    }
+
+    #similar-panel-title {
+        text-style: bold;
+        padding-bottom: 1;
+    }
+
+    #similar-list {
+        height: auto;
+        max-height: 24;
+        overflow-y: auto;
+    }
+
+    #similar-panel-help {
+        color: $text-muted;
+        padding-top: 1;
+    }
     """
 
     BINDINGS = [
@@ -408,6 +473,7 @@ class ThreadlineApp(App):
         Binding("enter", "view_entry", "View", show=True),
         Binding("escape", "close_overlay", "Back", show=False),
         Binding("o", "open_source", "Open", show=True),
+        Binding("s", "show_similar", "Similar", show=True),
         Binding("t", "toggle_tag_picker", "Tag", show=True),
         Binding("n", "new_tag", "New Tag", show=False),
         Binding("f", "toggle_filter_panel", "Filter", show=True),
@@ -469,6 +535,12 @@ class ThreadlineApp(App):
             ),
             Static("[c] Clear all  [Esc] Close", id="filter-panel-help"),
             id="filter-panel",
+        )
+        yield Container(
+            Static("Similar Entries", id="similar-panel-title"),
+            ListView(id="similar-list"),
+            Static("[Enter] View  [Esc] Close", id="similar-panel-help"),
+            id="similar-panel",
         )
         yield Footer()
 
@@ -623,9 +695,10 @@ class ThreadlineApp(App):
         detail_view.add_class("visible")
 
     def action_close_overlay(self) -> None:
-        """Close the filter panel, tag picker, or detail view (in priority order)."""
+        """Close the filter panel, tag picker, similar panel, or detail view (in priority order)."""
         filter_panel = self.query_one("#filter-panel", Container)
         tag_picker = self.query_one("#tag-picker", Container)
+        similar_panel = self.query_one("#similar-panel", Container)
         detail_view = self.query_one("#detail-view", Container)
         list_view = self.query_one("#entry-list", ListView)
 
@@ -637,6 +710,11 @@ class ThreadlineApp(App):
         # Then close tag picker if open
         if tag_picker.has_class("visible"):
             tag_picker.remove_class("visible")
+            return
+
+        # Then close similar panel if open
+        if similar_panel.has_class("visible"):
+            similar_panel.remove_class("visible")
             return
 
         # Then close detail view if open
@@ -900,6 +978,64 @@ class ThreadlineApp(App):
         """Handle hide todos toggle."""
         self._hide_todos = event.checked
         self._apply_filters()
+
+    def action_show_similar(self) -> None:
+        """Show similar entries for the current entry."""
+        detail_view = self.query_one("#detail-view", Container)
+
+        # Only works in detail view
+        if not detail_view.has_class("visible"):
+            return
+
+        if self.selected_entry is None:
+            return
+
+        # Check if entry has embedding
+        if not self.selected_entry.embedding:
+            return
+
+        similar_panel = self.query_one("#similar-panel", Container)
+
+        if similar_panel.has_class("visible"):
+            # Close the panel
+            similar_panel.remove_class("visible")
+        else:
+            # Open the panel and populate with similar entries
+            self._refresh_similar_panel()
+            similar_panel.add_class("visible")
+
+    def _refresh_similar_panel(self) -> None:
+        """Refresh the similar entries panel."""
+        if not self.selected_entry:
+            return
+
+        similar_list = self.query_one("#similar-list", ListView)
+        similar_list.clear()
+
+        with get_db() as db:
+            repo = EntryRepository(db.conn)
+            similar_entries = repo.find_similar(self.selected_entry.id, limit=10)
+
+        if not similar_entries:
+            similar_list.append(ListItem(Static("[yellow]No similar entries found[/yellow]")))
+            return
+
+        for entry, similarity in similar_entries:
+            similar_list.append(SimilarEntryListItem(entry, similarity, id=f"similar-{entry.id}"))
+
+    def on_list_view_selected(self, event: ListView.Selected) -> None:
+        """Handle selection in the similar entries list."""
+        # Check if this is the similar list
+        if event.list_view.id == "similar-list":
+            # Get the selected item
+            if event.item and hasattr(event.item, "entry"):
+                entry = event.item.entry  # type: ignore
+                # Close the similar panel
+                similar_panel = self.query_one("#similar-panel", Container)
+                similar_panel.remove_class("visible")
+                # Show the selected entry
+                self.selected_entry = entry
+                self._show_detail(entry)
 
 
 def run_browse() -> None:
