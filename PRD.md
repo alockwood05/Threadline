@@ -438,6 +438,57 @@ View system status.
 
 ---
 
+
+## Phase 5: Code Quality & Performance
+
+Technical debt cleanup and performance optimizations identified through architectural review.
+
+### F5.1: Database Connection Standardization
+Standardize database connection handling across all CLI commands.
+
+- [ ] Use `get_db()` context manager consistently in all commands
+- [ ] Remove manual `Database()` instantiation and `close()` calls
+- [ ] Add connection error handling with user-friendly messages
+
+### F5.2: Batch Insert Optimization
+Improve database write performance for large ingestions.
+
+- [ ] Replace `create_many()` loop with `executemany()` for single commit
+- [ ] Add transaction support with rollback on failure
+- [ ] Target: 10x improvement for 100+ entry batches
+
+### F5.3: Vector Similarity Search Optimization
+Use sqlite-vss extension for database-side similarity search.
+
+- [ ] Implement `find_similar()` using VSS virtual table instead of Python-side calculation
+- [ ] Remove full table scan for similarity queries
+- [ ] Target: <100ms for similarity search regardless of entry count
+
+### F5.4: TUI Code Modularization
+Split monolithic TUI app into focused modules.
+
+- [ ] Extract `screens/browse.py` - Browse screen logic
+- [ ] Extract `widgets/entry_card.py` - Entry display widgets
+- [ ] Extract `widgets/tag_picker.py` - Tag picker widget
+- [ ] Extract `widgets/filter_panel.py` - Filter controls
+- [ ] Create base `ToggleWidget` class to reduce checkbox duplication
+
+### F5.5: Type Annotation Consistency
+Standardize Python type annotations across codebase.
+
+- [ ] Add `from __future__ import annotations` to all modules
+- [ ] Ensure all public functions have return type hints
+- [ ] Add missing parameter type hints
+
+### F5.6: Error Handling Improvements
+Improve error handling and logging throughout.
+
+- [ ] Replace silent `except: pass` with logged warnings
+- [ ] Add custom exception classes for repository errors
+- [ ] Add `--verbose` flag for detailed error output
+
+---
+
 ## Configuration
 
 `~/.threadline/config.yaml`:
@@ -603,56 +654,6 @@ threadline doctor                  # Check for issues
 27. F5.6: Error handling improvements
 
 **Outcome:** Cleaner, faster, more maintainable codebase.
-
----
-
-## Phase 5: Code Quality & Performance
-
-Technical debt cleanup and performance optimizations identified through architectural review.
-
-### F5.1: Database Connection Standardization
-Standardize database connection handling across all CLI commands.
-
-- [ ] Use `get_db()` context manager consistently in all commands
-- [ ] Remove manual `Database()` instantiation and `close()` calls
-- [ ] Add connection error handling with user-friendly messages
-
-### F5.2: Batch Insert Optimization
-Improve database write performance for large ingestions.
-
-- [ ] Replace `create_many()` loop with `executemany()` for single commit
-- [ ] Add transaction support with rollback on failure
-- [ ] Target: 10x improvement for 100+ entry batches
-
-### F5.3: Vector Similarity Search Optimization
-Use sqlite-vss extension for database-side similarity search.
-
-- [ ] Implement `find_similar()` using VSS virtual table instead of Python-side calculation
-- [ ] Remove full table scan for similarity queries
-- [ ] Target: <100ms for similarity search regardless of entry count
-
-### F5.4: TUI Code Modularization
-Split monolithic TUI app into focused modules.
-
-- [ ] Extract `screens/browse.py` - Browse screen logic
-- [ ] Extract `widgets/entry_card.py` - Entry display widgets
-- [ ] Extract `widgets/tag_picker.py` - Tag picker widget
-- [ ] Extract `widgets/filter_panel.py` - Filter controls
-- [ ] Create base `ToggleWidget` class to reduce checkbox duplication
-
-### F5.5: Type Annotation Consistency
-Standardize Python type annotations across codebase.
-
-- [ ] Add `from __future__ import annotations` to all modules
-- [ ] Ensure all public functions have return type hints
-- [ ] Add missing parameter type hints
-
-### F5.6: Error Handling Improvements
-Improve error handling and logging throughout.
-
-- [ ] Replace silent `except: pass` with logged warnings
-- [ ] Add custom exception classes for repository errors
-- [ ] Add `--verbose` flag for detailed error output
 
 ---
 
