@@ -459,3 +459,144 @@ class TestTagRepository:
         assert "tag2" in tagged_entry.tags
 
         db.close()
+
+
+class TestTagsCLI:
+    """Tests for `threadline tags` CLI commands."""
+
+    def test_tags_list_empty(self, initialized_threadline: Path) -> None:
+        """threadline tags list shows message when no tags exist."""
+        result = runner.invoke(app, ["tags", "list"])
+
+        assert result.exit_code == 0, f"Tags list failed: {result.output}"
+        assert "No tags found" in result.output
+
+    def test_tags_create(self, initialized_threadline: Path) -> None:
+        """threadline tags create creates a new tag."""
+        result = runner.invoke(app, ["tags", "create", "important", "--color", "red"])
+
+        assert result.exit_code == 0, f"Tags create failed: {result.output}"
+        assert "Created tag 'important'" in result.output
+
+        # Verify tag exists
+        list_result = runner.invoke(app, ["tags", "list"])
+        assert "important" in list_result.output
+        assert "red" in list_result.output
+
+    def test_tags_create_duplicate_fails(self, initialized_threadline: Path) -> None:
+        """Creating duplicate tag fails with error."""
+        runner.invoke(app, ["tags", "create", "duplicate"])
+        result = runner.invoke(app, ["tags", "create", "duplicate"])
+
+        assert result.exit_code == 1, "Should fail for duplicate tag"
+        assert "already exists" in result.output
+
+    def test_tags_delete(self, initialized_threadline: Path) -> None:
+        """threadline tags delete removes a tag."""
+        # Create a tag first
+        runner.invoke(app, ["tags", "create", "todelete"])
+
+        # Delete with --yes to skip confirmation
+        result = runner.invoke(app, ["tags", "delete", "todelete", "--yes"])
+
+        assert result.exit_code == 0, f"Tags delete failed: {result.output}"
+        assert "Deleted tag 'todelete'" in result.output
+
+        # Verify tag is gone
+        list_result = runner.invoke(app, ["tags", "list"])
+        assert "todelete" not in list_result.output
+
+    def test_tags_delete_nonexistent_fails(self, initialized_threadline: Path) -> None:
+        """Deleting non-existent tag fails."""
+        result = runner.invoke(app, ["tags", "delete", "nonexistent", "--yes"])
+
+        assert result.exit_code == 1, "Should fail for non-existent tag"
+        assert "not found" in result.output
+
+    def test_tags_rename(self, initialized_threadline: Path) -> None:
+        """threadline tags rename changes tag name."""
+        # Create a tag
+        runner.invoke(app, ["tags", "create", "oldname"])
+
+        # Rename it
+        result = runner.invoke(app, ["tags", "rename", "oldname", "newname"])
+
+        assert result.exit_code == 0, f"Tags rename failed: {result.output}"
+        assert "Renamed tag 'oldname' to 'newname'" in result.output
+
+        # Verify rename worked
+        list_result = runner.invoke(app, ["tags", "list"])
+        assert "newname" in list_result.output
+        assert "oldname" not in list_result.output
+
+    def test_tags_rename_to_existing_fails(self, initialized_threadline: Path) -> None:
+        """Renaming to existing tag name fails."""
+        runner.invoke(app, ["tags", "create", "tag1"])
+        runner.invoke(app, ["tags", "create", "tag2"])
+
+        result = runner.invoke(app, ["tags", "rename", "tag1", "tag2"])
+
+        assert result.exit_code == 1, "Should fail when target name exists"
+        assert "already exists" in result.output
+
+    def test_tags_merge(self, initialized_threadline: Path) -> None:
+        """threadline tags merge combines two tags."""
+        # Create two tags
+        runner.invoke(app, ["tags", "create", "source"])
+        runner.invoke(app, ["tags", "create", "target"])
+
+        # Merge with --yes
+        result = runner.invoke(app, ["tags", "merge", "source", "target", "--yes"])
+
+        assert result.exit_code == 0, f"Tags merge failed: {result.output}"
+        assert "Merged 'source' into 'target'" in result.output
+
+        # Verify source is gone, target remains
+        list_result = runner.invoke(app, ["tags", "list"])
+        assert "target" in list_result.output
+        assert "source" not in list_result.output
+
+    def test_tags_merge_moves_entries(
+        self, initialized_threadline: Path, sample_markdown: Path
+    ) -> None:
+        """Tags merge moves entries from source to target tag."""
+        # Ingest a file to create entries
+        runner.invoke(app, ["ingest", str(sample_markdown), "--no-embeddings"])
+
+        from threadline.db.connection import Database
+        from threadline.db.repositories.tags import TagRepository
+        from threadline.db.repositories.entries import EntryRepository
+        from threadline.ingest.models import TagCreate
+
+        db = Database(initialized_threadline / "threadline.db")
+        tag_repo = TagRepository(db.conn)
+        entry_repo = EntryRepository(db.conn)
+
+        # Create tags via CLI
+        runner.invoke(app, ["tags", "create", "fromtag"])
+        runner.invoke(app, ["tags", "create", "totag"])
+
+        # Get tag IDs
+        fromtag = tag_repo.get_by_name("fromtag")
+        totag = tag_repo.get_by_name("totag")
+
+        # Add fromtag to an entry
+        entries = entry_repo.list()
+        entry_id = entries[0].id
+        tag_repo.add_tag_to_entry(entry_id, fromtag.id)
+
+        db.close()
+
+        # Merge via CLI
+        result = runner.invoke(app, ["tags", "merge", "fromtag", "totag", "--yes"])
+        assert result.exit_code == 0
+
+        # Verify entry now has totag
+        db = Database(initialized_threadline / "threadline.db")
+        entry_repo = EntryRepository(db.conn)
+        entry = entry_repo.get(entry_id)
+
+        assert "totag" in entry.tags, f"Entry should have totag: {entry.tags}"
+        assert "fromtag" not in entry.tags, "Entry should not have fromtag"
+
+        db.close()

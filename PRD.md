@@ -392,11 +392,11 @@ Find similar entries using embeddings.
 #### F3.3: Tag Management CLI
 Manage tags from command line.
 
-- [ ] `threadline tags list` - show all tags with counts
-- [ ] `threadline tags create <name>` - create new tag
-- [ ] `threadline tags delete <name>` - delete tag (with confirmation)
-- [ ] `threadline tags rename <old> <new>` - rename tag
-- [ ] `threadline tags merge <source> <target>` - merge tags
+- [x] `threadline tags list` - show all tags with counts
+- [x] `threadline tags create <name>` - create new tag
+- [x] `threadline tags delete <name>` - delete tag (with confirmation)
+- [x] `threadline tags rename <old> <new>` - rename tag
+- [x] `threadline tags merge <source> <target>` - merge tags
 
 ---
 

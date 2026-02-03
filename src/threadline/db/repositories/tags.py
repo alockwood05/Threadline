@@ -61,6 +61,44 @@ class TagRepository:
         self.conn.commit()
         return cursor.rowcount > 0
 
+    def rename(self, tag_id: int, new_name: str) -> bool:
+        """Rename a tag."""
+        cursor = self.conn.execute(
+            "UPDATE tags SET name = ? WHERE id = ?",
+            (new_name, tag_id),
+        )
+        self.conn.commit()
+        return cursor.rowcount > 0
+
+    def merge(self, source_id: int, target_id: int) -> int:
+        """Merge source tag into target tag.
+
+        Moves all entries from source tag to target tag (ignoring duplicates),
+        then deletes the source tag.
+
+        Returns the number of entries moved.
+        """
+        # Get entries that have the source tag but not the target tag
+        # (we don't want to create duplicate entry_tags)
+        cursor = self.conn.execute(
+            """
+            UPDATE entry_tags
+            SET tag_id = ?
+            WHERE tag_id = ?
+            AND entry_id NOT IN (
+                SELECT entry_id FROM entry_tags WHERE tag_id = ?
+            )
+            """,
+            (target_id, source_id, target_id),
+        )
+        moved_count = cursor.rowcount
+
+        # Delete the source tag (CASCADE will remove any remaining entry_tags)
+        self.conn.execute("DELETE FROM tags WHERE id = ?", (source_id,))
+        self.conn.commit()
+
+        return moved_count
+
     def get_entry_tag_ids(self, entry_id: int) -> list[int]:
         """Get tag IDs for an entry."""
         rows = self.conn.execute(
