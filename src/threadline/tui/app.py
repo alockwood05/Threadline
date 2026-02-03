@@ -16,7 +16,8 @@ from threadline.db.connection import get_db
 from threadline.db.repositories.entries import EntryRepository
 from threadline.db.repositories.sources import SourceRepository
 from threadline.db.repositories.tags import TagRepository
-from threadline.ingest.models import Entry, Source, Tag, TagCreate
+from threadline.db.repositories.themes import ThemeRepository
+from threadline.ingest.models import Entry, Source, Tag, TagCreate, Theme
 
 # Available entry types for filtering
 ENTRY_TYPES = [
@@ -243,6 +244,32 @@ class HideTodosToggle(Static):
         self.post_message(self.Toggled(self.checked))
 
 
+class ThemeListItem(ListItem):
+    """A list item for theme selection."""
+
+    def __init__(self, theme: Theme, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.theme = theme
+
+    def compose(self) -> ComposeResult:
+        import json
+
+        # Parse keywords JSON to display top 5
+        keywords_str = ""
+        if self.theme.keywords:
+            try:
+                keywords = json.loads(self.theme.keywords)
+                # keywords is a list of {"word": str, "weight": float}
+                top_keywords = keywords[:5]
+                keywords_str = ", ".join(kw["word"] for kw in top_keywords)
+            except (json.JSONDecodeError, KeyError, TypeError):
+                keywords_str = ""
+
+        yield Label(f"[bold]{self.theme.name}[/bold] [dim]({self.theme.entry_count} entries)[/dim]")
+        if keywords_str:
+            yield Label(f"  [cyan]{keywords_str}[/cyan]", classes="keywords")
+
+
 class ThreadlineApp(App):
     """Main Threadline browsing application."""
 
@@ -462,6 +489,51 @@ class ThreadlineApp(App):
         color: $text-muted;
         padding-top: 1;
     }
+
+    #themes-panel {
+        display: none;
+        width: 60;
+        height: auto;
+        max-height: 30;
+        background: $surface;
+        border: solid $primary;
+        padding: 1;
+        layer: overlay;
+        dock: right;
+    }
+
+    #themes-panel.visible {
+        display: block;
+    }
+
+    #themes-panel-title {
+        text-style: bold;
+        padding-bottom: 1;
+    }
+
+    #themes-list {
+        height: auto;
+        max-height: 24;
+        overflow-y: auto;
+    }
+
+    ThemeListItem {
+        height: auto;
+        padding: 0 1;
+    }
+
+    ThemeListItem:hover {
+        background: $primary-background;
+    }
+
+    ThemeListItem .keywords {
+        color: $text-muted;
+    }
+
+    #themes-panel-help {
+        color: $text-muted;
+        padding-top: 1;
+    }
     """
 
     BINDINGS = [
@@ -478,6 +550,7 @@ class ThreadlineApp(App):
         Binding("n", "new_tag", "New Tag", show=False),
         Binding("f", "toggle_filter_panel", "Filter", show=True),
         Binding("c", "clear_filters", "Clear", show=False),
+        Binding("T", "toggle_themes_panel", "Themes", show=True),
     ]
 
     # Reactive state
@@ -491,6 +564,7 @@ class ThreadlineApp(App):
     _filter_entry_types: set[str]
     _filter_tag_ids: set[int]
     _hide_todos: bool
+    _filter_theme_id: int | None
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -500,6 +574,7 @@ class ThreadlineApp(App):
         self._filter_entry_types = set()
         self._filter_tag_ids = set()
         self._hide_todos = False
+        self._filter_theme_id = None
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -542,6 +617,12 @@ class ThreadlineApp(App):
             Static("[Enter] View  [Esc] Close", id="similar-panel-help"),
             id="similar-panel",
         )
+        yield Container(
+            Static("Themes", id="themes-panel-title"),
+            ListView(id="themes-list"),
+            Static("[Enter] Filter by theme  [Esc] Close", id="themes-panel-help"),
+            id="themes-panel",
+        )
         yield Footer()
 
     def on_mount(self) -> None:
@@ -577,7 +658,9 @@ class ThreadlineApp(App):
             entry_types = self._get_active_entry_type_filter()
             tag_ids = list(self._filter_tag_ids) if self._filter_tag_ids else None
 
-            self.total_entries = repo.count(entry_types=entry_types, tag_ids=tag_ids)
+            self.total_entries = repo.count(
+                entry_types=entry_types, tag_ids=tag_ids, theme_id=self._filter_theme_id
+            )
 
             offset = self.current_offset if append else 0
             entries = repo.list(
@@ -585,6 +668,7 @@ class ThreadlineApp(App):
                 offset=offset,
                 entry_types=entry_types,
                 tag_ids=tag_ids,
+                theme_id=self._filter_theme_id,
             )
 
             if not append:
@@ -619,6 +703,8 @@ class ThreadlineApp(App):
         if self._filter_tag_ids:
             tag_count = len(self._filter_tag_ids)
             filter_parts.append(f"[magenta]{tag_count} tag{'s' if tag_count > 1 else ''}[/magenta]")
+        if self._filter_theme_id is not None:
+            filter_parts.append("[green]theme[/green]")
 
         if filter_parts:
             filter_text = " | Filters: " + ", ".join(filter_parts)
@@ -695,10 +781,11 @@ class ThreadlineApp(App):
         detail_view.add_class("visible")
 
     def action_close_overlay(self) -> None:
-        """Close the filter panel, tag picker, similar panel, or detail view (in priority order)."""
+        """Close the filter panel, tag picker, similar panel, themes panel, or detail view (in priority order)."""
         filter_panel = self.query_one("#filter-panel", Container)
         tag_picker = self.query_one("#tag-picker", Container)
         similar_panel = self.query_one("#similar-panel", Container)
+        themes_panel = self.query_one("#themes-panel", Container)
         detail_view = self.query_one("#detail-view", Container)
         list_view = self.query_one("#entry-list", ListView)
 
@@ -715,6 +802,11 @@ class ThreadlineApp(App):
         # Then close similar panel if open
         if similar_panel.has_class("visible"):
             similar_panel.remove_class("visible")
+            return
+
+        # Then close themes panel if open
+        if themes_panel.has_class("visible"):
+            themes_panel.remove_class("visible")
             return
 
         # Then close detail view if open
@@ -966,6 +1058,7 @@ class ThreadlineApp(App):
         self._filter_entry_types.clear()
         self._filter_tag_ids.clear()
         self._hide_todos = False
+        self._filter_theme_id = None
 
         # Refresh filter panel if visible
         filter_panel = self.query_one("#filter-panel", Container)
@@ -1024,7 +1117,7 @@ class ThreadlineApp(App):
             similar_list.append(SimilarEntryListItem(entry, similarity, id=f"similar-{entry.id}"))
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
-        """Handle selection in the similar entries list."""
+        """Handle selection in the similar or themes lists."""
         # Check if this is the similar list
         if event.list_view.id == "similar-list":
             # Get the selected item
@@ -1036,6 +1129,43 @@ class ThreadlineApp(App):
                 # Show the selected entry
                 self.selected_entry = entry
                 self._show_detail(entry)
+
+        # Check if this is the themes list
+        elif event.list_view.id == "themes-list":
+            if event.item and hasattr(event.item, "theme"):
+                theme = event.item.theme  # type: ignore
+                # Close the themes panel
+                themes_panel = self.query_one("#themes-panel", Container)
+                themes_panel.remove_class("visible")
+                # Set theme filter and reload
+                self._filter_theme_id = theme.id
+                self._apply_filters()
+
+    def action_toggle_themes_panel(self) -> None:
+        """Toggle the themes panel overlay."""
+        themes_panel = self.query_one("#themes-panel", Container)
+
+        if themes_panel.has_class("visible"):
+            themes_panel.remove_class("visible")
+        else:
+            self._refresh_themes_panel()
+            themes_panel.add_class("visible")
+
+    def _refresh_themes_panel(self) -> None:
+        """Refresh the themes panel with all themes."""
+        themes_list = self.query_one("#themes-list", ListView)
+        themes_list.clear()
+
+        with get_db() as db:
+            theme_repo = ThemeRepository(db.conn)
+            themes = theme_repo.list(limit=100)
+
+        if not themes:
+            themes_list.append(ListItem(Static("[yellow]No themes found. Run 'threadline extract-themes' first.[/yellow]")))
+            return
+
+        for theme in themes:
+            themes_list.append(ThemeListItem(theme, id=f"theme-{theme.id}"))
 
 
 def run_browse() -> None:

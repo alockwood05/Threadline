@@ -69,6 +69,7 @@ class EntryRepository:
         entry_types: list[str] | None = None,
         tag_ids: list[int] | None = None,
         source_id: int | None = None,
+        theme_id: int | None = None,
     ) -> list[Entry]:
         """List entries with optional filters."""
         query = "SELECT DISTINCT e.* FROM entries e"
@@ -82,6 +83,12 @@ class EntryRepository:
             placeholders = ",".join("?" * len(tag_ids))
             conditions.append(f"et.tag_id IN ({placeholders})")
             params.extend(tag_ids)
+
+        # Join for theme filtering
+        if theme_id is not None:
+            joins.append("JOIN entry_themes eth ON e.id = eth.entry_id")
+            conditions.append("eth.theme_id = ?")
+            params.append(theme_id)
 
         # Filter by entry type
         if entry_types:
@@ -117,6 +124,7 @@ class EntryRepository:
         self,
         entry_types: list[str] | None = None,
         tag_ids: list[int] | None = None,
+        theme_id: int | None = None,
     ) -> int:
         """Count entries with optional filters."""
         query = "SELECT COUNT(DISTINCT e.id) FROM entries e"
@@ -129,6 +137,11 @@ class EntryRepository:
             placeholders = ",".join("?" * len(tag_ids))
             conditions.append(f"et.tag_id IN ({placeholders})")
             params.extend(tag_ids)
+
+        if theme_id is not None:
+            joins.append("JOIN entry_themes eth ON e.id = eth.entry_id")
+            conditions.append("eth.theme_id = ?")
+            params.append(theme_id)
 
         if entry_types:
             placeholders = ",".join("?" * len(entry_types))
