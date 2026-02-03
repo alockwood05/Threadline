@@ -414,11 +414,11 @@ Export entries matching filters.
 #### F4.2: Re-process Entries
 Re-run processing on existing entries.
 
-- [ ] `threadline reprocess --embeddings` - regenerate with different model
-- [ ] `threadline reprocess --classify` - re-run classification
-- [ ] `threadline reprocess --themes` - alias for `extract-themes`
-- [ ] Useful after model upgrades or config changes
-- [ ] Shows before/after comparison for classification changes
+- [x] `threadline reprocess --embeddings` - regenerate with different model
+- [x] `threadline reprocess --classify` - re-run classification
+- [x] `threadline reprocess --themes` - alias for `extract-themes`
+- [x] Useful after model upgrades or config changes
+- [x] Shows before/after comparison for classification changes
 
 #### F4.3: Database Backup
 Backup and restore functionality.
