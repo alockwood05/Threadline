@@ -20,6 +20,7 @@ LOG_DIR="${SCRIPT_DIR}/.ralph-logs"
 ITERATIONS=1
 DRY_RUN=false
 MODEL="sonnet"  # sonnet for speed, opus for complex work
+TIMEOUT=0       # 0 = no timeout, or seconds (e.g., 1800 for 30 min)
 
 # Colors for output
 RED='\033[0;31m'
@@ -57,6 +58,7 @@ Automated feature development loop using Claude Code.
 Options:
     -n, --iterations N    Number of iterations to run (default: 1)
     -m, --model MODEL     Model to use: sonnet (default, faster) or opus (complex work)
+    -t, --timeout SECS    Timeout per iteration in seconds (default: 0 = no timeout)
     -d, --dry-run         Show what would be done without running
     -p, --prompt FILE     Use custom prompt file (default: ralph-prompt.md)
     -h, --help            Show this help message
@@ -66,6 +68,7 @@ Examples:
     $(basename "$0") 3            # Run 3 iterations
     $(basename "$0") -n 5         # Run 5 iterations
     $(basename "$0") -m opus      # Use opus for complex features
+    $(basename "$0") -t 1800      # 30 minute timeout per iteration
     $(basename "$0") --dry-run    # Preview without running
 EOF
 }
@@ -105,6 +108,18 @@ while [[ $# -gt 0 ]]; do
             fi
             shift 2
             ;;
+        -t|--timeout)
+            if [[ -z "${2:-}" ]]; then
+                error "Option $1 requires an argument"
+                exit 1
+            fi
+            TIMEOUT="$2"
+            if ! [[ "$TIMEOUT" =~ ^[0-9]+$ ]]; then
+                error "Timeout must be a non-negative integer (seconds)"
+                exit 1
+            fi
+            shift 2
+            ;;
         -h|--help)
             usage
             exit 0
@@ -133,14 +148,7 @@ if ! command -v claude &> /dev/null; then
     exit 1
 fi
 
-if ! command -v unbuffer &> /dev/null; then
-    error "unbuffer not found (provided by 'expect' package)"
-    error "  macOS:        brew install expect"
-    error "  Debian/Ubuntu: sudo apt install expect"
-    error "  Fedora/RHEL:   sudo dnf install expect"
-    error "unbuffer is needed to prevent output buffering when piping claude output"
-    exit 1
-fi
+# Note: unbuffer is no longer required - we use process substitution instead
 
 if [[ ! -f "$PROMPT_FILE" ]]; then
     error "Prompt file not found: $PROMPT_FILE"
@@ -175,6 +183,11 @@ main() {
     log "Prompt file: $PROMPT_FILE"
     log "Model: $MODEL"
     log "Iterations: $ITERATIONS"
+    if [[ "$TIMEOUT" -gt 0 ]]; then
+        log "Timeout: ${TIMEOUT}s per iteration"
+    else
+        log "Timeout: disabled"
+    fi
     log "Working directory: $SCRIPT_DIR"
 
     local initial_remaining
@@ -201,6 +214,8 @@ main() {
 
         local remaining
         remaining=$(count_remaining)
+        local completed_before
+        completed_before=$(count_completed)
 
         if [[ "$remaining" -eq 0 ]]; then
             success "All PRD items completed!"
@@ -231,20 +246,25 @@ main() {
         # --dangerously-skip-permissions to bypass permission checks
         #
         # Temporarily disable errexit to capture exit code properly.
-        # Direct output to terminal (via tee to log) without extra pipe stages
-        # to avoid buffering issues that make it seem like the script is hanging.
+        # Use process substitution instead of piping to avoid buffering issues.
         local exit_code=0
         set +e
 
-        # Use unbuffer to prevent output buffering when piping to tee.
-        # Without it, claude detects the pipe and buffers output until exit.
-        # pipefail is already set, so we get claude's exit code from the pipeline.
-        unbuffer claude -p "$prompt" \
-            --dangerously-skip-permissions \
-            --verbose \
-            --model "$MODEL" \
-            2>&1 | tee "$log_file"
-        exit_code=${PIPESTATUS[0]}
+        # Process substitution avoids the buffering issues that unbuffer+tee caused.
+        # Output goes directly to terminal AND log file without intermediate pipes.
+        if [[ "$TIMEOUT" -gt 0 ]]; then
+            timeout "$TIMEOUT" claude -p "$prompt" \
+                --dangerously-skip-permissions \
+                --model "$MODEL" \
+                > >(tee "$log_file") 2>&1
+            exit_code=$?
+        else
+            claude -p "$prompt" \
+                --dangerously-skip-permissions \
+                --model "$MODEL" \
+                > >(tee "$log_file") 2>&1
+            exit_code=$?
+        fi
 
         set -e
 
@@ -256,6 +276,10 @@ main() {
 
         if [[ "$exit_code" -eq 0 ]]; then
             success "Iteration $i completed"
+        elif [[ "$exit_code" -eq 124 ]]; then
+            error "Iteration $i timed out after ${TIMEOUT}s"
+            warn "Check log: $log_file"
+            # Continue to next iteration rather than failing entirely
         else
             error "Iteration $i failed with exit code $exit_code"
             warn "Check log: $log_file"
@@ -273,8 +297,15 @@ main() {
         local new_completed
         new_completed=$(count_completed)
         local items_done=$((initial_remaining - new_remaining))
+        local iteration_progress=$((new_completed - completed_before))
 
         log "Progress: ${new_completed} completed (+$((new_completed - initial_completed))), ${new_remaining} remaining"
+
+        # Warn if no progress was made this iteration
+        if [[ "$iteration_progress" -eq 0 ]] && [[ "$exit_code" -eq 0 ]]; then
+            warn "No PRD items were completed this iteration"
+            warn "Claude may be stuck or the task may be too complex"
+        fi
 
         # Brief pause between iterations to avoid rate limits
         if [[ $i -lt $ITERATIONS ]] && [[ "$new_remaining" -gt 0 ]]; then
