@@ -18,7 +18,7 @@ log "Prompt file: $PROMPT_FILE"
 log "================================================"
 log "Running claude"
 log "================================================"
-claude --model opus -p "$PROMPT_FILE" --dangerously-skip-permissions --verbose
+claude --model opus -p "$PROMPT_FILE" --dangerously-skip-permissions
 log "================================================"
 log "Ralph test completed"
 log "================================================"

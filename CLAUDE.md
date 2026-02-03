@@ -77,6 +77,7 @@ Key fixtures in `tests/conftest.py`:
 - `sample_markdown`: test file with known content
 
 Tests marked `@pytest.mark.slow` require ML model loading.
+**Do Not Run these slow tests `@pytest.mark.slow` unless explicitly wanting to test them.**
 
 ## Development Status
 

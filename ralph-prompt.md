@@ -12,6 +12,7 @@ You are executing an automated development cycle for the Threadline project. You
    - Features within a phase should be completed in order (F1.1 before F1.2, etc.)
    - Complete Phase 1 before Phase 2, etc.
    - Within a feature, complete all acceptance criteria before moving to the next feature
+4. Double check current uncommitted changes, and make completing the uncoimpleted work, according to the PRD the priority for this loop.
 
 ### Step 2: Implement the Feature
 

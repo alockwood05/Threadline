@@ -20,7 +20,7 @@ LOG_DIR="${SCRIPT_DIR}/.ralph-logs"
 ITERATIONS=1
 DRY_RUN=false
 MODEL="sonnet"  # sonnet for speed, opus for complex work
-TIMEOUT=0       # 0 = no timeout, or seconds (e.g., 1800 for 30 min)
+TIMEOUT=0       # Inactivity timeout: 0 = disabled, or seconds of no output before killing
 
 # Colors for output
 RED='\033[0;31m'
@@ -58,7 +58,8 @@ Automated feature development loop using Claude Code.
 Options:
     -n, --iterations N    Number of iterations to run (default: 1)
     -m, --model MODEL     Model to use: sonnet (default, faster) or opus (complex work)
-    -t, --timeout SECS    Timeout per iteration in seconds (default: 0 = no timeout)
+    -t, --timeout SECS    Inactivity timeout in seconds (default: 0 = no timeout)
+                          Kills claude if no output for SECS seconds
     -d, --dry-run         Show what would be done without running
     -p, --prompt FILE     Use custom prompt file (default: ralph-prompt.md)
     -h, --help            Show this help message
@@ -68,7 +69,7 @@ Examples:
     $(basename "$0") 3            # Run 3 iterations
     $(basename "$0") -n 5         # Run 5 iterations
     $(basename "$0") -m opus      # Use opus for complex features
-    $(basename "$0") -t 1800      # 30 minute timeout per iteration
+    $(basename "$0") -t 300       # Kill if no output for 5 minutes
     $(basename "$0") --dry-run    # Preview without running
 EOF
 }
@@ -148,7 +149,7 @@ if ! command -v claude &> /dev/null; then
     exit 1
 fi
 
-# Note: unbuffer is no longer required - we use process substitution instead
+# Note: stdbuf/unbuffer don't work with Claude CLI - use plain output
 
 if [[ ! -f "$PROMPT_FILE" ]]; then
     error "Prompt file not found: $PROMPT_FILE"
@@ -184,9 +185,9 @@ main() {
     log "Model: $MODEL"
     log "Iterations: $ITERATIONS"
     if [[ "$TIMEOUT" -gt 0 ]]; then
-        log "Timeout: ${TIMEOUT}s per iteration"
+        log "Inactivity timeout: ${TIMEOUT}s"
     else
-        log "Timeout: disabled"
+        log "Inactivity timeout: disabled"
     fi
     log "Working directory: $SCRIPT_DIR"
 
@@ -246,25 +247,91 @@ main() {
         # --dangerously-skip-permissions to bypass permission checks
         #
         # Temporarily disable errexit to capture exit code properly.
-        # Use process substitution instead of piping to avoid buffering issues.
         local exit_code=0
         set +e
 
-        # Process substitution avoids the buffering issues that unbuffer+tee caused.
-        # Output goes directly to terminal AND log file without intermediate pipes.
-        if [[ "$TIMEOUT" -gt 0 ]]; then
-            timeout "$TIMEOUT" claude -p "$prompt" \
-                --dangerously-skip-permissions \
-                --model "$MODEL" \
-                > >(tee "$log_file") 2>&1
-            exit_code=$?
-        else
-            claude -p "$prompt" \
-                --dangerously-skip-permissions \
-                --model "$MODEL" \
-                > >(tee "$log_file") 2>&1
-            exit_code=$?
+        # Start claude in background and monitor progress
+        # Note: stdbuf/unbuffer don't work correctly with Claude CLI, so we use
+        # plain output which may be buffered but works reliably
+        # Close stdin (</dev/null) to prevent any stdin-waiting issues
+        claude -p "$prompt" \
+            --dangerously-skip-permissions \
+            --model "$MODEL" \
+            </dev/null > "$log_file" 2>&1 &
+        local claude_pid=$!
+        log "Started claude with PID: $claude_pid"
+
+        # Monitor loop: show status every 5 seconds while claude runs
+        # Also implements inactivity timeout if TIMEOUT > 0
+        local last_size=0
+        local last_change_time=$start_time
+        local timed_out=false
+        while kill -0 "$claude_pid" 2>/dev/null; do
+            sleep 5
+            local current_size
+            current_size=$(wc -c < "$log_file" 2>/dev/null || echo "0")
+            local now
+            now=$(date +%s)
+            local elapsed=$((now - start_time))
+            local since_change=$((now - last_change_time))
+            local size_delta=$((current_size - last_size))
+
+            # Format elapsed time as MM:SS
+            local mins=$((elapsed / 60))
+            local secs=$((elapsed % 60))
+            local elapsed_fmt
+            elapsed_fmt=$(printf "%02d:%02d" $mins $secs)
+
+            # Get process state (R=running, S=sleeping, D=disk wait)
+            local proc_state
+            proc_state=$(ps -o state= -p "$claude_pid" 2>/dev/null | head -c1 || echo "?")
+
+            if [[ "$size_delta" -gt 0 ]]; then
+                echo -e "${DIM}[${elapsed_fmt}] ▶ Output: ${current_size} bytes (+${size_delta})${NC}"
+                last_change_time=$now
+            else
+                # Show quiet status, warn only after 5 min of no output
+                if [[ "$since_change" -ge 600 ]]; then
+                    local quiet_mins=$((since_change / 60))
+                    echo -e "${YELLOW}[${elapsed_fmt}] ◦ Process alive (state: $proc_state), no output for ${quiet_mins}m${NC}"
+                else
+                    echo -e "${DIM}[${elapsed_fmt}] ◦ Process alive (state: $proc_state), waiting...${NC}"
+                fi
+            fi
+            last_size=$current_size
+
+            # Inactivity timeout: kill if no output for TIMEOUT seconds
+            if [[ "$TIMEOUT" -gt 0 ]] && [[ "$since_change" -ge "$TIMEOUT" ]]; then
+                warn "Inactivity timeout: no output for ${TIMEOUT}s"
+                # Log diagnostic info before killing
+                warn "Process info before kill:"
+                ps -p "$claude_pid" -o pid,ppid,state,etime,command 2>/dev/null || echo "  (process not found)"
+                # Try graceful TERM first, then KILL after 5s if needed
+                kill -TERM "$claude_pid" 2>/dev/null || true
+                sleep 5
+                if kill -0 "$claude_pid" 2>/dev/null; then
+                    warn "Process didn't respond to SIGTERM, sending SIGKILL"
+                    kill -KILL "$claude_pid" 2>/dev/null || true
+                fi
+                timed_out=true
+                break
+            fi
+        done
+
+        # Capture exit code (must not use || true, that clobbers $?)
+        wait "$claude_pid" 2>/dev/null
+        exit_code=$?
+
+        # Set timeout exit code if we triggered the timeout
+        if [[ "$timed_out" == true ]]; then
+            exit_code=124  # GNU timeout convention
         fi
+
+        log "Claude exited with code: $exit_code"
+
+        # Show final output
+        echo ""
+        cat "$log_file"
 
         set -e
 
@@ -277,7 +344,7 @@ main() {
         if [[ "$exit_code" -eq 0 ]]; then
             success "Iteration $i completed"
         elif [[ "$exit_code" -eq 124 ]]; then
-            error "Iteration $i timed out after ${TIMEOUT}s"
+            error "Iteration $i killed: no output for ${TIMEOUT}s"
             warn "Check log: $log_file"
             # Continue to next iteration rather than failing entirely
         else
